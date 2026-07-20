@@ -710,25 +710,24 @@ function AnalysisSide({ name, color, total, data, mode }) {
     <div>
       <div style={{ ...styles.sideHeader, color }}>{name}</div>
       <div style={styles.sideSub}>{total} verlorene {total === 1 ? "Punkt" : "Punkte"}</div>
-   {teamSize === 2 && (() => {
+{teamSize === 2 && entries.some(e => e.player && names[t]?.includes(e.player)) && (() => {
+  let topPlayer = "";
+  let maxVal = 0;
   const counts = {};
   entries.forEach(e => {
     if (e.player && names[t]?.includes(e.player)) {
       counts[e.player] = (counts[e.player] || 0) + 1;
+      if (counts[e.player] > maxVal) {
+        maxVal = counts[e.player];
+        topPlayer = e.player;
+      }
     }
   });
-  const pairs = Object.entries(counts);
-  if (!pairs.length) return null;
-  let topPlayer = "";
-  let maxVal = 0;
-  pairs.forEach(([p, val]) => {
-    if (val > maxVal) { maxVal = val; topPlayer = p; }
-  });
-  return (
+  return topPlayer ? (
     <div style={{ fontSize: "13px", opacity: 0.85, marginBottom: "8px", color: COLORS[t], fontWeight: "bold" }}>
       Meiste Fehler: {topPlayer} ({maxVal}x)
     </div>
-  );
+  ) : null;
 })()}
 
   {top && <div style={styles.topReasonBox}>Meist: <strong>{top.name}</strong> ({top.value}×)</div>}
