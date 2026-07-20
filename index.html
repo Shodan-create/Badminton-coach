@@ -594,7 +594,9 @@ kurz bevor {teamSize === 1 ? "er" : "sie"} den Ballwechsel {teamSize === 1 ? "ve
               )}
               {step === "player" && (
                 <>
-                  <div style={styles.panelLabel}>Wer aus {teamLabel(pending.winner === "a" ? "b" : "a")} hatte den entscheidenden Ballkontakt?</div>
+               <div style={styles.panelLabel}>Welcher von {teamLabel(pending.winner === "a" ? "b" : "a")} 
+hat den Ball verloren?</div>
+
                   <div style={styles.winnerRow}>
                     {names[pending.winner === "a" ? "b" : "a"].slice(0, 2).map((p) => (
                       <button key={p} style={{ ...styles.winnerBtn, borderColor: "rgba(248,246,240,0.25)", color: "#F0EEE6" }} onClick={() => choosePlayer(p)}>{p}</button>
