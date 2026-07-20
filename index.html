@@ -530,9 +530,11 @@ function BadmintonTracker() {
               {step === "servezone" && (
                 <>
                   <div style={styles.panelLabel}>
-                    Aufschlag von <span style={{ color: COLORS[server], fontWeight: 700 }}>{teamLabel(server)}</span> – in welchen Bereich gespielt?
-                    <div style={styles.subHint}>
-                      Aus dem {current[server] % 2 === 0 ? "rechten" : "linken"} Aufschlagfeld (Stand {current[server]}) · Reihenfolge spiegelt sich automatisch je nach Seite
+                 Aufschlag von <span style={{ color: COLORS[server], fontWeight: 700 }}>{teamLabel(server)}</span> – auf welche Nummer ging der Aufschlag?
+<div style={styles.subHint}>
+  Aus dem {current[server] % 2 === 0 ? "rechten" : "linken"} Aufschlagfeld (Stand {current[server]})
+</div>
+
                     </div>
                   </div>
                   <ServeSequence onSelect={chooseServeZone} mirrored={current[server] % 2 !== 0} server={server} names={names} teamSize={teamSize} colors={COLORS} />
