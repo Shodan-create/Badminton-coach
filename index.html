@@ -537,7 +537,7 @@ function BadmintonTracker() {
               </div>
  
               
-                <ServeSequence onSelect={chooseServeZone} mirrored={current[server] % 2 !== 0} server={server} names={names} teamSize={teamSize} colors={COLORS} />
+              <ServeSequence onSelect={chooseServeZone} mirrored={false} server={server} names={names} teamSize={teamSize} />
                 </>
               )}
               {step === "winner" && (
