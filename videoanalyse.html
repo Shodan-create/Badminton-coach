@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Badminton Videoanalyse</title>
+    <!-- Zuverlässiges Laden der Google MediaPipe Bibliotheken -->
+    <script src="https://jsdelivr.net" crossorigin="anonymous"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -63,12 +65,9 @@
     </div>
 </div>
 
-<!-- Hier nutzen wir type="module", um MediaPipe sauber zu importieren -->
-<script type="module">
-    import {
-        PoseLandmarker,
-        FilesetResolver
-    } from "https://jsdelivr.net";
+<script>
+    // Holt die Klassen sicher aus dem globalen MediaPipe-Objekt
+    const { PoseLandmarker, FilesetResolver } = qg.tasks.vision;
 
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
@@ -147,22 +146,19 @@
 
         // Punkte zeichnen
         landmarks.forEach((landmark) => {
-            const x = landmark.x * canvas.width;
-            const y = landmark.y * canvas.height;
-            
-            ctx.beginPath();
-            ctx.arc(x, y, 5, 0, 2 * Math.PI);
-            ctx.fillStyle = "#00ffcc";
-            ctx.fill();
+            if (landmark.visibility > 0.5) { // Nur sichtbare Gelenke zeichnen
+                const x = landmark.x * canvas.width;
+                const y = landmark.y * canvas.height;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                ctx.fillStyle = "#00ffcc";
+                ctx.fill();
+            }
         });
 
         // Knochen/Linien definieren
-        const connections = [
-            [11, 13], [13, 15], // Linker Arm
-            [12, 14], [14, 16], // Rechter Arm
-            [11, 12], [11, 23], [12, 24], [23, 24], // Torso
-            [23, 25], [25, 27], // Linkes Bein
-            [24, 26], [26, 28]  // Rechtes Bein
+        const connections = [, [11, 13], [13, 15], [12, 14], [14, 16], // Arme und Schultern, [12, 24], [23, 24],                      // Torso, [25, 27], [24, 26], [26, 28]             // Beine
         ];
 
         ctx.strokeStyle = "#ffffff";
@@ -172,7 +168,7 @@
             const start = landmarks[startIdx];
             const end = landmarks[endIdx];
 
-            if (start && end) {
+            if (start && end && start.visibility > 0.5 && end.visibility > 0.5) {
                 ctx.beginPath();
                 ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
                 ctx.lineTo(end.x * canvas.width, end.y * canvas.height);
