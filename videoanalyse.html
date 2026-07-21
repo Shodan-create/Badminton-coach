@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KI Badminton Videoanalyse</title>
+    
+    <!-- Die offiziellen Google KI-Bibliotheken -->
+    <script src="https://jsdelivr.net" crossorigin="anonymous"></script>
+    <script src="https://jsdelivr.net" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #121212;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+        }
+        .video-container {
+            position: relative;
+            display: inline-block;
+            margin-top: 20px;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            max-width: 100%;
+        }
+        video {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            max-height: 65vh;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        .status {
+            color: #ffcc00;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        select {
+            background: #333;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🏸 KI Badminton Bewegungsanalyse</h1>
+    <p>Lade dein Video hoch. Das digitale Skelett wird beim Abspielen automatisch darübergelegt.</p>
+    
+    <div class="controls">
+        <input type="file" id="fileInput" accept="video/*, .mov">
+        <p id="status" class="status">KI wird geladen... Bitte warten.</p>
+    </div>
+
+    <div class="video-container">
+        <video id="video" controls playsinline></video>
+        <canvas id="canvas"></canvas>
+    </div>
+    
+    <div>
+        <select id="speedSelect">
+            <option value="1">Normal (1x)</option>
+            <option value="0.5">Slow-Mo (0.5x)</option>
+            <option value="0.25" selected>Slow-Mo (0.25x)</option>
+        </select>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const fileInput = document.getElementById('fileInput');
+    const statusText = document.getElementById('status');
+    const speedSelect = document.getElementById('speedSelect');
+
+    // 1. Google KI initialisieren
+    const pose = new Pose({
+        locateFile: (file) => {
+            return `https://jsdelivr.net{file}`;
+        }
+    });
+
+    pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+
+    // 2. Wenn die KI Ergebnisse liefert, zeichnen wir Punkte und Linien
+    pose.onResults((results) => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        if (results.poseLandmarks) {
+            // Verbindungslinien (Knochen) zeichnen
+            drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#ffffff', lineWidth: 4});
+            // Gelenke als neongrüne Punkte zeichnen
+            drawLandmarks(ctx, results.poseLandmarks, {color: '#00ffcc', lineWidth: 2, radius: 5});
+        }
+    });
+
+    // Signalisiert, dass das Modell bereit ist
+    statusText.innerText = "KI startbereit! Bitte wähle jetzt dein Video aus.";
+    statusText.style.color = "#00ffcc";
+
+    // 3. Video-Upload verarbeiten
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0]; // Holt die ausgewählte Datei
+        if (file) {
+            const fileURL = URL.createObjectURL(file);
+            video.src = fileURL;
+            video.load();
+            statusText.innerText = "Video erfolgreich geladen! Drücke auf Play.";
+            statusText.style.color = "#00ffcc";
+        }
+    });
+
+    video.addEventListener('loadedmetadata', () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        video.playbackRate = parseFloat(speedSelect.value);
+    });
+
+    speedSelect.addEventListener('change', () => {
+        video.playbackRate = parseFloat(speedSelect.value);
+    });
+
+    // 4. Der Analyse-Loop für jedes Videoframe
+    async function processFrame() {
+        if (video.paused || video.ended) return;
+        
+        await pose.send({ image: video });
+        
+        // Nutzt die moderne Browser-Funktion für flüssige Video-Frames
+        if (video.requestVideoFrameCallback) {
+            video.requestVideoFrameCallback(processFrame);
+        } else {
+            setTimeout(processFrame, 40);
+        }
+    }
+
+    video.addEventListener('play', () => {
+        statusText.innerText = "Analysiere Laufweg & Schlagtechnik...";
+        statusText.style.color = "#ffcc00";
+        
+        if (video.requestVideoFrameCallback) {
+            video.requestVideoFrameCallback(processFrame);
+        } else {
+            processFrame();
+        }
+    });
+</script>
+
+</body>
+</html>
