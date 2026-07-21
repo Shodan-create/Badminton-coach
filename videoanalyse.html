@@ -1,12 +1,11 @@
-
 <!DOCTYPE html>
 <html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stabile KI Badminton Videoanalyse</title>
+    <title>KI Badminton Videoanalyse (Next-Gen)</title>
     
-    <!-- Die beiden sichersten Bibliotheken für KI im Browser: p5 und ml5 -->
+    <!-- Die brandneuen, offiziellen Next-Gen Skripte (Kompatibel mit v1.0+) -->
     <script src="https://cloudflare.com"></script>
     <script src="https://unpkg.com"></script>
 
@@ -31,7 +30,6 @@
             font-weight: bold;
             font-size: 1.2em;
         }
-        /* Das Vorschaufenster, in dem p5.js das Video und Skelett zeichnet */
         #canvas-holder {
             display: inline-block;
             margin-top: 10px;
@@ -41,7 +39,7 @@
             overflow: hidden;
         }
         video {
-            display: none; /* Das rohe Video verstecken wir, p5 zeichnet es neu */
+            display: none; /* Versteckt das rohe Video, p5 übernimmt das Zeichnen */
         }
     </style>
 </head>
@@ -49,7 +47,7 @@
 
 <div class="container">
     <h1>Badminton KI-Bewegungsanalyse</h1>
-    <p>Lade dein Badminton-Video hoch. Die KI zeichnet dein Skelett live ins Bild.</p>
+    <p>Lade dein Video hoch. Die neue KI-Engine zeichnet dein Skelett live ins Bild.</p>
     
     <div class="controls">
         <input type="file" id="fileInput" accept="video/*">
@@ -62,26 +60,21 @@
 
 <script>
     let video;
-    let poseNet;
+    let bodyPose;
     let poses = [];
     const statusText = document.getElementById('status');
     const fileInput = document.getElementById('fileInput');
 
-    // p5.js startet automatisch und baut das Videofeld auf
+    // 1. p5.js bereitet das Videofeld vor
     function setup() {
-        // Erstellt das Anzeigefeld
         const canvas = createCanvas(640, 480);
         canvas.parent('canvas-holder');
 
+        // Holt das Video-Element aus dem HTML
         video = select('#video');
         
-        // Initialisiert PoseNet (die Bewegungserkennung)
-        poseNet = ml5.poseNet(video, modelReady);
-        
-        // Sobald die KI eine Person sieht, speichert sie die Gelenke ab
-        poseNet.on('pose', function(results) {
-            poses = results;
-        });
+        // Nutzt das brandneue 'MoveNet' Modell der Next-Gen Version von ml5
+        bodyPose = ml5.bodyPose('MoveNet', modelReady);
     }
 
     function modelReady() {
@@ -89,54 +82,70 @@
         statusText.style.color = "#00ffcc";
     }
 
-    // Hört darauf, wenn du eine MP4 Datei hochlädst
+    // 2. Sobald die KI läuft, trackt sie kontinuierlich das Skelett
+    function gotPoses(results) {
+        poses = results;
+    }
+
+    // 3. Verarbeitet den Video-Upload
     fileInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
+        const file = e.target.files[0]; // Holt die Datei absolut sicher ab
         if (file) {
             const fileURL = URL.createObjectURL(file);
             video.elt.src = fileURL;
             video.elt.load();
-            video.elt.play(); // Startet das Video automatisch
-            statusText.innerText = "Video läuft! Analysiere Körperhaltung...";
-            statusText.style.color = "#ffcc00";
+            
+            // Wichtig: Wartet kurz, bis das Video bereit ist, und startet dann das Tracking
+            video.elt.onloadeddata = function() {
+                video.elt.play();
+                // Startet die kontinuierliche Erkennung auf dem Video-Stream
+                bodyPose.detectStart(video, gotPoses);
+                statusText.innerText = "Video läuft! Analysiere Laufweg & Schlagtechnik...";
+                statusText.style.color = "#ffcc00";
+            };
         }
     });
 
-    // p5.js zeichnet dieses Feld 60 Mal pro Sekunde komplett neu (Loop)
+    // 4. p5.js zeichnet das Bild und die Linien (Loop)
     function draw() {
-        // Zeichnet das aktuelle Videobild auf das Canvas
+        // Zeichnet das aktuelle Videobild auf das Anzeigefeld
         image(video, 0, 0, width, height);
 
-        // Wenn die KI Gelenke gefunden hat, zeichnen wir das Skelett darüber
+        // Wenn Personen gefunden wurden, zeichnen wir Punkte und Verbindungslinien
         if (poses.length > 0) {
             drawSkeleton();
         }
     }
 
     function drawSkeleton() {
-        // Schleife durch alle erkannten Personen (normalerweise 1)
+        // Schleife durch alle gefundenen Personen
         for (let i = 0; i < poses.length; i++) {
-            let pose = poses[i].pose;
-            let skeleton = poses[i].skeleton;
+            let pose = poses[i];
 
-            // 1. Alle Schlüsselpunkte (Gelenke) als Punkte einzeichnen
+            // 1. Zeichne die Gelenkpunkte (Schultern, Knie, Ellbogen etc.)
             for (let j = 0; j < pose.keypoints.length; j++) {
                 let keypoint = pose.keypoints[j];
-                // Nur zeichnen, wenn sich die KI zu mehr als 20% sicher ist
-                if (keypoint.score > 0.2) {
-                    fill(0, 255, 204); // Neongrün
+                // Nur zeichnen, wenn sich die KI sicher genug ist
+                if (keypoint.confidence > 0.3) {
+                    fill(0, 255, 204); // Schickes Neongrün
                     noStroke();
-                    ellipse(keypoint.position.x, keypoint.position.y, 12, 12);
+                    ellipse(keypoint.x, keypoint.y, 10, 10);
                 }
             }
 
-            // 2. Die Gelenke mit weißen Linien (Knochen) verbinden
-            for (let j = 0; j < skeleton.length; j++) {
-                let partA = skeleton[j][0];
-                let partB = skeleton[j][1];
-                stroke(255, 255, 255); // Weiß
-                strokeWeight(4);
-                line(partA.position.x, partA.position.y, partB.position.x, partB.position.y);
+            // 2. Zeichne die Verbindungslinien (Knochen) mithilfe der neuen ml5-Struktur
+            if (pose.connections) {
+                for (let j = 0; j < pose.connections.length; j++) {
+                    let connection = pose.connections[j];
+                    let partA = connection[0];
+                    let partB = connection[1];
+                    
+                    if (partA && partB && partA.confidence > 0.3 && partB.confidence > 0.3) {
+                        stroke(255, 255, 255); // Weiße Linien
+                        strokeWeight(3);
+                        line(partA.x, partA.y, partB.x, partB.y);
+                    }
+                }
             }
         }
     }
