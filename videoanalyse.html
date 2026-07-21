@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Badminton Videoanalyse Pro</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #121212;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+        .video-wrapper {
+            position: relative;
+            display: inline-block;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 3px solid #333;
+            margin-top: 15px;
+        }
+        video {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            max-height: 70vh;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+        .toolbar {
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+        button, select, input[type="file"] {
+            background: #333;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #444;
+        }
+        .status-bar {
+            color: #00ffcc;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🏸 Badminton Videoanalyse Tool</h1>
+    <p>Video hochladen, Abspielgeschwindigkeit anpassen oder pausieren und Linien/Winkel direkt auf das Bild zeichnen.</p>
+
+    <div>
+        <input type="file" id="fileInput" accept="video/*, .mov">
+    </div>
+
+    <div class="video-wrapper">
+        <video id="video" playsinline></video>
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <div class="status-bar" id="statusBar">Bereit. Bitte lade ein Video hoch.</div>
+
+    <div class="toolbar">
+        <button id="playBtn">▶ Play</button>
+        <button id="prevFrame">◀ Frame zurück</button>
+        <button id="nextFrame">Frame vor ▶</button>
+        
+        <select id="speedSelect">
+            <option value="1">Normal (1x)</option>
+            <option value="0.5">Slow-Mo (0.5x)</option>
+            <option value="0.25" selected>Slow-Mo (0.25x)</option>
+        </select>
+
+        <button id="clearBtn" style="background: #ff3333;">❌ Zeichnung löschen</button>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const fileInput = document.getElementById('fileInput');
+    const statusBar = document.getElementById('statusBar');
+    
+    const playBtn = document.getElementById('playBtn');
+    const prevFrame = document.getElementById('prevFrame');
+    const nextFrame = document.getElementById('nextFrame');
+    const speedSelect = document.getElementById('speedSelect');
+    const clearBtn = document.getElementById('clearBtn');
+
+    let isDrawing = false;
+    let lines = []; 
+
+    // 1. Video laden
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files;
+        if (file && file[0]) {
+            const fileURL = URL.createObjectURL(file[0]);
+            video.src = fileURL;
+            video.load();
+            statusBar.innerText = "Video erfolgreich geladen! Nutze die Tasten unten zum Steuern.";
+            lines = [];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    });
+
+    video.addEventListener('loadedmetadata', () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        video.playbackRate = parseFloat(speedSelect.value);
+    });
+
+    window.addEventListener('resize', () => {
+        if(video.videoWidth) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            redrawCanvas();
+        }
+    });
+
+    // 2. Video-Steuerung
+    playBtn.addEventListener('click', () => {
+        if (video.paused) {
+            video.play();
+            playBtn.innerText = "⏸ Pause";
+        } else {
+            video.pause();
+            playBtn.innerText = "▶ Play";
+        }
+    });
+
+    speedSelect.addEventListener('change', () => {
+        video.playbackRate = parseFloat(speedSelect.value);
+    });
+
+    prevFrame.addEventListener('click', () => {
+        video.pause();
+        playBtn.innerText = "▶ Play";
+        video.currentTime = Math.max(0, video.currentTime - 0.04);
+    });
+
+    nextFrame.addEventListener('click', () => {
+        video.pause();
+        playBtn.innerText = "▶ Play";
+        video.currentTime = Math.min(video.duration, video.currentTime + 0.04);
+    });
+
+    // 3. Manuelles Zeichen-System
+    function getMousePos(e) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: ((e.clientX - rect.left) / rect.width) * canvas.width,
+            y: ((e.clientY - rect.top) / rect.height) * canvas.height
+        };
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+        if (!video.src) return;
+        isDrawing = true;
+        const pos = getMousePos(e);
+        lines.push([{ x: pos.x, y: pos.y }]);
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (!isDrawing) return;
+        const pos = getMousePos(e);
+        const currentLine = lines[lines.length - 1];
+        currentLine.push({ x: pos.x, y: pos.y });
+        redrawCanvas();
+    });
+
+    window.addEventListener('mouseup', () => {
+        isDrawing = false;
+    });
+
+    function redrawCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = "#00ffcc"; 
+        ctx.lineWidth = 5;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        lines.forEach(line => {
+            if (line.length < 2) return;
+            ctx.beginPath();
+            ctx.moveTo(line[0].x, line[0].y);
+            for (let i = 1; i < line.length; i++) {
+                ctx.lineTo(line[i].x, line[i].y);
+            }
+            ctx.stroke();
+        });
+    }
+
+    clearBtn.addEventListener('click', () => {
+        lines = [];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+</script>
+
+</body>
+</html>
