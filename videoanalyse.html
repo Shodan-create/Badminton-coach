@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Badminton Videoanalyse</title>
+    <!-- MediaPipe Links für die KI-Bibliothek -->
+    <script src="https://jsdelivr.net" crossorigin="anonymous"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #121212;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+        }
+        .video-container {
+            position: relative;
+            display: inline-block;
+            margin-top: 20px;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        video {
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Klicks gehen durch das Canvas aufs Video */
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        .status {
+            color: #ffcc00;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Badminton KI-Bewegungsanalyse</h1>
+    <p>Lade ein Video hoch, um dein Skelett-Tracking beim Smash oder der Beinarbeit zu sehen.</p>
+    
+    <div class="controls">
+        <input type="file" id="fileInput" accept="video/*">
+        <p id="status" class="status">KI-Modell wird geladen... Bitte warten.</p>
+    </div>
+
+    <div class="video-container">
+        <video id="video" controls></video>
+        <canvas id="canvas"></canvas>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const fileInput = document.getElementById('fileInput');
+    const statusText = document.getElementById('status');
+    
+    let poseLandmarker;
+    let animationFrameId;
+
+    // 1. MediaPipe KI-Modell initialisieren
+    async function initPoseEstimation() {
+        try {
+            const vision = await FilesetResolver.forVisionTasks(
+                "https://jsdelivr.net"
+            );
+            poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: "https://googleapis.com",
+                    delegate: "GPU" // Nutzt Grafikkarte für maximale Geschwindigkeit
+                },
+                runningMode: "VIDEO",
+                outputSegmentationMasks: false
+            });
+            statusText.innerText = "KI-Modell bereit! Video hochladen zum Starten.";
+        } catch (error) {
+            statusText.innerText = "Fehler beim Laden des Modells: " + error;
+            console.error(error);
+        }
+    }
+
+    // 2. Video-Upload verarbeiten
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const fileURL = URL.createObjectURL(file);
+            video.src = fileURL;
+            video.load();
+            statusText.innerText = "Video geladen. Drücke auf Play.";
+        }
+    });
+
+    // Meta-Daten abwarten, um Canvas-Größe anzupassen
+    video.addEventListener('loadedmetadata', () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+    });
+
+    // 3. Analyse-Loop starten, wenn Video spielt
+    video.addEventListener('play', () => {
+        statusText.innerText = "Analysiere Bewegung...";
+        function processFrame() {
+            if (video.paused || video.ended) return;
+
+            // KI-Erkennung für das aktuelle Frame triggern
+            if (poseLandmarker) {
+                const startTimeMs = performance.now();
+                const results = poseLandmarker.detectForVideo(video, startTimeMs);
+                drawResults(results);
+            }
+
+            animationFrameId = requestAnimationFrame(processFrame);
+        }
+        animationFrameId = requestAnimationFrame(processFrame);
+    });
+
+    video.addEventListener('pause', () => {
+        cancelAnimationFrame(animationFrameId);
+    });
+
+    // 4. Skelett auf das Canvas zeichnen
+    function drawResults(results) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (!results.landmarks || results.landmarks.length === 0) return;
+
+        const landmarks = results.landmarks[0];
+
+        // Punkte zeichnen (z.B. Ellbogen, Knie, Schultern)
+        landmarks.forEach((landmark) => {
+            const x = landmark.x * canvas.width;
+            const y = landmark.y * canvas.height;
+            
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = "#00ffcc"; // Neon-Türkis für Sichtbarkeit
+            ctx.fill();
+        });
+
+        // Knochen/Linien zeichnen (Beispiel-Verbindungen für Badminton-Relevanz)
+        const connections = [
+            [11, 12], [11, 13], [13, 15], // Linker Arm (Schulter -> Ellbogen -> Handgelenk)
+            [12, 14], [14, 16],           // Rechter Arm (Wichtig für Schlagarm-Analyse)
+            [11, 23], [12, 24], [23, 24], // Torso / Hüfte
+            [23, 25], [25, 27],           // Linkes Bein (Hüfte -> Knie -> Knöchel)
+            [24, 26], [26, 28]            // Rechtes Bein (Wichtig für Ausfallschritt-Tiefe)
+        ];
+
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 3;
+
+        connections.forEach(([startIdx, endIdx]) => {
+            const start = landmarks[startIdx];
+            const end = landmarks[endIdx];
+
+            if (start && end) {
+                ctx.beginPath();
+                ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
+                ctx.lineTo(end.x * canvas.width, end.y * canvas.height);
+                ctx.stroke();
+            }
+        });
+    }
+
+    // Starten
+    initPoseEstimation();
+</script>
+
+</body>
+</html>
