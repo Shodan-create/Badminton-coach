@@ -5,11 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Badminton Videoanalyse</title>
     
-    <!-- Die absolut stabilen, klassischen MediaPipe Skripte -->
+    <!-- Die offiziellen, topaktuellen Bibliotheken direkt von Google AI Edge -->
     <script src="https://jsdelivr.net" crossorigin="anonymous"></script>
-    <script src="https://jsdelivr.net" crossorigin="anonymous"></script>
-    <script src="https://jsdelivr.net" crossorigin="anonymous"></script>
-
+    
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -29,12 +27,11 @@
             background: #000;
             border-radius: 8px;
             overflow: hidden;
-            width: 100%;
-            max-width: 640px;
+            max-width: 100%;
         }
         video {
             display: block;
-            width: 100%;
+            max-width: 100%;
             height: auto;
         }
         canvas {
@@ -79,43 +76,42 @@
     const fileInput = document.getElementById('fileInput');
     const statusText = document.getElementById('status');
 
-    // 1. MediaPipe Pose Instanz erstellen
-    const pose = new Pose({
-        locateFile: (file) => {
-            return `https://jsdelivr.net{file}`;
+    let poseLandmarker;
+    let animationFrameId;
+
+    // 1. Neues MediaPipe-System über das globale Objekt initialisieren
+    async function initPose() {
+        try {
+            // Holt sich den Resolver direkt aus dem geladenen Bundle-Skript
+            const vision = await mediapipe.tasks.vision.FilesetResolver.forVisionTasks(
+                "https://jsdelivr.net"
+            );
+            
+            poseLandmarker = await mediapipe.tasks.vision.PoseLandmarker.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: "https://googleapis.com",
+                    delegate: "GPU"
+                },
+                runningMode: "VIDEO"
+            });
+            
+            statusText.innerText = "KI startbereit! Bitte wähle ein Video aus.";
+            statusText.style.color = "#00ffcc";
+        } catch (err) {
+            statusText.innerText = "Ladefehler: " + err;
+            statusText.style.color = "#ff3333";
+            console.error(err);
         }
-    });
+    }
 
-    pose.setOptions({
-        modelComplexity: 1, // 1 = Ausgewogen für Geschwindigkeit & Genauigkeit
-        smoothLandmarks: true,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-    });
-
-    // Sobald die KI Ergebnisse liefert, zeichnen wir sie auf das Canvas
-    pose.onResults((results) => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        if (results.poseLandmarks) {
-            // Nutzen der offiziellen Zeichenfunktion von MediaPipe
-            drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#ffffff', lineWidth: 4});
-            drawLandmarks(ctx, results.poseLandmarks, {color: '#00ffcc', lineWidth: 2, radius: 5});
-        }
-    });
-
-    // Bestätigung, dass das Skript startbereit ist
-    statusText.innerText = "KI bereit! Bitte wähle ein Video aus.";
-    statusText.style.color = "#00ffcc";
-
-    // 2. Video-Upload verarbeiten
+    // 2. Lokales Video einlesen und im Player starten
     fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0]; // Greift korrekt auf die erste ausgewählte Datei zu
+        const file = e.target.files[0]; // Vergiss das [0] nicht, um das Video zu greifen!
         if (file) {
             const fileURL = URL.createObjectURL(file);
             video.src = fileURL;
             video.load();
-            statusText.innerText = "Video geladen. Drücke auf Play zum Analysieren.";
+            statusText.innerText = "Video geladen. Klicke auf Play!";
             statusText.style.color = "#00ffcc";
         }
     });
@@ -125,33 +121,70 @@
         canvas.height = video.videoHeight;
     });
 
-    // 3. Analyse-Loop beim Abspielen des Videos triggern
-    let isProcessing = false;
-    async function processVideoFrame() {
-        if (video.paused || video.ended) {
-            isProcessing = false;
-            return;
-        }
+    // 3. Frame für Frame an die KI senden, wenn das Video läuft
+    video.addEventListener('play', () => {
+        statusText.innerText = "Analysiere Laufweg & Schlägerhaltung...";
+        statusText.style.color = "#ffcc00";
         
-        // Schickt das aktuelle Einzelbild an die KI
-        try {
-            await pose.send({ image: video });
-        } catch (err) {
-            console.error("Frame-Verarbeitung fehlgeschlagen:", err);
-        }
+        function processFrame() {
+            if (video.paused || video.ended) return;
 
-        // Führt die Funktion beim nächsten Frame wieder aus
-        requestAnimationFrame(processVideoFrame);
+            if (poseLandmarker) {
+                const timestamp = performance.now();
+                const results = poseLandmarker.detectForVideo(video, timestamp);
+                drawSkeleton(results);
+            }
+            animationFrameId = requestAnimationFrame(processFrame);
+        }
+        animationFrameId = requestAnimationFrame(processFrame);
+    });
+
+    video.addEventListener('pause', () => {
+        cancelAnimationFrame(animationFrameId);
+    });
+
+    // 4. Zeichnen der Punkte und Linien
+    function drawSkeleton(results) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (!results.landmarks || results.landmarks.length === 0) return;
+
+        const landmarks = results.landmarks[0];
+
+        // Gelenke zeichnen
+        landmarks.forEach((landmark) => {
+            if (landmark.visibility > 0.5) {
+                ctx.beginPath();
+                ctx.arc(landmark.x * canvas.width, landmark.y * canvas.height, 5, 0, 2 * Math.PI);
+                ctx.fillStyle = "#00ffcc";
+                ctx.fill();
+            }
+        });
+
+        // Vorgefertigte Knochen-Verbindungen (Schultern, Arme, Beine)
+        const connections = [
+            [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Arme
+            [11, 23], [12, 24], [23, 24],                     // Torso
+            [23, 25], [25, 27], [24, 26], [26, 28]              // Beine
+        ];
+
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 3;
+
+        connections.forEach(([s, e]) => {
+            const start = landmarks[s];
+            const end = landmarks[e];
+            if (start && end && start.visibility > 0.5 && end.visibility > 0.5) {
+                ctx.beginPath();
+                ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
+                ctx.lineTo(end.x * canvas.width, end.y * canvas.height);
+                ctx.stroke();
+            }
+        });
     }
 
-    video.addEventListener('play', () => {
-        statusText.innerText = "Analysiere Bewegung...";
-        statusText.style.color = "#ffcc00";
-        if (!isProcessing) {
-            isProcessing = true;
-            requestAnimationFrame(processVideoFrame);
-        }
-    });
+    // Start
+    initPose();
 </script>
 
 </body>
