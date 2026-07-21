@@ -681,11 +681,12 @@ function ServeSequence({ onSelect, mirrored, server, names, teamSize, colors }) 
       <div style={styles.simpleSliderWrap}>
         {/* Lege deine eigenen Bilder unter diesen Dateinamen neben die index.html im Repo */}
                                                   {teamSize === 2 ? (
-    // Im Doppel
+   // Im Doppel
 <>
-    <img src="return.png" alt="Aufschlag Doppel Startbild" style={{ ...slideStyle(active === 0), width: "100%", height: "100%", objectFit: "cover" }} />
+    <img src="Doppel%20Vogelperspektive.png" alt="Doppel Vogelperspektive" style={{ ...slideStyle(active === 0), width: "100%", height: "100%", objectFit: "cover" }} />
     <img src="Doppel%20pov.png" alt="Doppel POV Nachfolgebild" style={{ ...slideStyle(active === 1), width: "100%", height: "100%", objectFit: "cover" }} />
 </>
+
 ) : (
     // Im Einzel
     <>
