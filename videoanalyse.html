@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Badminton Videoanalyse Pro</title>
+    <title>KI Badminton Videoanalyse</title>
+    
+    <!-- Die stabilsten Skripte für das Google-Skelett-Tracking -->
+    <script src="https://jsdelivr.net" crossorigin="anonymous"></script>
+    <script src="https://jsdelivr.net" crossorigin="anonymous"></script>
+
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -14,17 +19,17 @@
             margin: 0;
         }
         .container {
-            max-width: 900px;
+            max-width: 800px;
             margin: auto;
         }
-        .video-wrapper {
+        .video-container {
             position: relative;
             display: inline-block;
+            margin-top: 20px;
             background: #000;
             border-radius: 8px;
             overflow: hidden;
-            border: 3px solid #333;
-            margin-top: 15px;
+            max-width: 100%;
         }
         video {
             display: block;
@@ -38,19 +43,17 @@
             left: 0;
             width: 100%;
             height: 100%;
-            cursor: crosshair;
+            pointer-events: none;
         }
-        .toolbar {
-            background: #1e1e1e;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 15px;
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 10px;
+        .controls {
+            margin: 20px 0;
         }
-        button, select, input[type="file"] {
+        .status {
+            color: #ffcc00;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        button, select {
             background: #333;
             color: white;
             border: none;
@@ -58,50 +61,32 @@
             border-radius: 5px;
             cursor: pointer;
             font-weight: bold;
-        }
-        button:hover {
-            background: #444;
-        }
-        .btn-active {
-            background: #00ffcc !important;
-            color: black !important;
-        }
-        .status-bar {
-            color: #00ffcc;
-            font-weight: bold;
-            margin: 10px 0;
+            margin: 5px;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🏸 Badminton Videoanalyse Tool</h1>
-    <p>Video hochladen, Abspielgeschwindigkeit anpassen oder pausieren und Linien/Winkel direkt auf das Bild zeichnen.</p>
-
-    <div>
+    <h1>🏸 Badminton KI-Bewegungsanalyse</h1>
+    <p>Lade dein Video hoch. Das digitale Skelett wird beim Abspielen live darübergelegt.</p>
+    
+    <div class="controls">
         <input type="file" id="fileInput" accept="video/*, .mov">
+        <p id="status" class="status">KI wird geladen... Bitte warten.</p>
     </div>
 
-    <div class="video-wrapper">
-        <video id="video" playsinline></video>
+    <div class="video-container">
+        <video id="video" controls playsinline></video>
         <canvas id="canvas"></canvas>
     </div>
-
-    <div class="status-bar" id="statusBar">Bereit. Bitte lade ein Video hoch.</div>
-
-    <div class="toolbar">
-        <button id="playBtn">▶ Play</button>
-        <button id="prevFrame">◀ Frame zurück</button>
-        <button id="nextFrame">Frame vor ▶</button>
-        
+    
+    <div style="margin-top: 10px;">
         <select id="speedSelect">
             <option value="1">Normal (1x)</option>
             <option value="0.5">Slow-Mo (0.5x)</option>
             <option value="0.25" selected>Slow-Mo (0.25x)</option>
         </select>
-
-        <button id="clearBtn" style="background: #ff3333;">❌ Zeichnung löschen</button>
     </div>
 </div>
 
@@ -110,27 +95,48 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const fileInput = document.getElementById('fileInput');
-    const statusBar = document.getElementById('statusBar');
-    
-    const playBtn = document.getElementById('playBtn');
-    const prevFrame = document.getElementById('prevFrame');
-    const nextFrame = document.getElementById('nextFrame');
+    const statusText = document.getElementById('status');
     const speedSelect = document.getElementById('speedSelect');
-    const clearBtn = document.getElementById('clearBtn');
 
-    let isDrawing = false;
-    let lines = []; // Speichert alle gezeichneten Linien
+    // 1. KI-Konfiguration einrichten
+    const pose = new Pose({
+        locateFile: (file) => {
+            // Lädt die benötigten KI-Dateien stabil aus dem unblockierten jsDelivr-Speicher
+            return `https://jsdelivr.net{file}`;
+        }
+    });
 
-    // 1. Video laden (Unterstützt MP4 und MOV von Apple-Geräten)
+    pose.setOptions({
+        modelComplexity: 1, // Perfekt ausbalanciert für schnelle Sportvideos
+        smoothLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+
+    // 2. Sobald die KI Punkte im Bild findet, zeichnen wir sie sofort ein
+    pose.onResults((results) => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        if (results.poseLandmarks) {
+            // Nutzt die eingebauten Zeichen-Befehle für Knochen und Punkte
+            drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#ffffff', lineWidth: 4});
+            drawLandmarks(ctx, results.poseLandmarks, {color: '#00ffcc', lineWidth: 2, radius: 6});
+        }
+    });
+
+    // Signalisiert, dass die Scripte geladen sind
+    statusText.innerText = "KI startbereit! Bitte wähle jetzt dein Video aus.";
+    statusText.style.color = "#00ffcc";
+
+    // 3. Video-Upload verarbeiten
     fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
+        const file = e.target.files[0]; // Greift exakt auf deine ausgewählte Datei zu
         if (file) {
             const fileURL = URL.createObjectURL(file);
             video.src = fileURL;
             video.load();
-            statusBar.innerText = "Video erfolgreich geladen! Nutze die Tasten unten zum Steuern.";
-            lines = [];
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            statusText.innerText = "Video erfolgreich geladen! Drücke auf Play.";
+            statusText.style.color = "#00ffcc";
         }
     });
 
@@ -140,96 +146,40 @@
         video.playbackRate = parseFloat(speedSelect.value);
     });
 
-    // Fenster-Größenänderung abfangen
-    window.addEventListener('resize', () => {
-        if(video.videoWidth) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            redrawCanvas();
-        }
-    });
-
-    // 2. Video-Steuerung
-    playBtn.addEventListener('click', () => {
-        if (video.paused) {
-            video.play();
-            playBtn.innerText = "⏸ Pause";
-        } else {
-            video.pause();
-            playBtn.innerText = "▶ Play";
-        }
-    });
-
     speedSelect.addEventListener('change', () => {
         video.playbackRate = parseFloat(speedSelect.value);
     });
 
-    // Frame-by-Frame Steuerung (ca. 0.04 Sekunden pro Frame bei 25fps)
-    prevFrame.addEventListener('click', () => {
-        video.pause();
-        playBtn.innerText = "▶ Play";
-        video.currentTime = Math.max(0, video.currentTime - 0.04);
-    });
-
-    nextFrame.addEventListener('click', () => {
-        video.pause();
-        playBtn.innerText = "▶ Play";
-        video.currentTime = Math.min(video.duration, video.currentTime + 0.04);
-    });
-
-    // 3. Manuelles Zeichen-System auf dem Canvas
-    function getMousePos(e) {
-        const rect = canvas.getBoundingClientRect();
-        // Berechnet die exakte Position passend zur echten Video-Auflösung
-        return {
-            x: ((e.clientX - rect.left) / rect.width) * canvas.width,
-            y: ((e.clientY - rect.top) / rect.height) * canvas.height
-        };
+    // 4. Der Analyse-Loop (Schickt jedes Bild des Videos an die KI)
+    async function processFrame() {
+        if (video.paused || video.ended) {
+            return;
+        }
+        
+        // Bild an Google KI übergeben
+        await pose.send({ image: video });
+        
+        // Nächstes Bild anfordern
+        video.requestVideoFrameCallback(processFrame);
     }
 
-    canvas.addEventListener('mousedown', (e) => {
-        if (!video.src) return;
-        isDrawing = true;
-        const pos = getMousePos(e);
-        lines.push([{ x: pos.x, y: pos.y }]);
-    });
-
-    canvas.addEventListener('mousemove', (e) => {
-        if (!isDrawing) return;
-        const pos = getMousePos(e);
-        const currentLine = lines[lines.length - 1];
-        currentLine.push({ x: pos.x, y: pos.y });
-        redrawCanvas();
-    });
-
-    window.addEventListener('mouseup', () => {
-        isDrawing = false;
-    });
-
-    // Zeichnet alle Linien neu auf das Feld
-    function redrawCanvas() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.strokeStyle = "#00ffcc"; // Tolles Neongrün für Sichtbarkeit im Sportvideo
-        ctx.lineWidth = 5;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-
-        lines.forEach(line => {
-            if (line.length < 2) return;
-            ctx.beginPath();
-            ctx.moveTo(line[0].x, line[0].y);
-            for (let i = 1; i < line.length; i++) {
-                ctx.lineTo(line[i].x, line[i].y);
-            }
-            ctx.stroke();
-        });
-    }
-
-    clearBtn.addEventListener('click', () => {
-        lines = [];
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Startet die Analyse, sobald du im Player auf Play drückst
+    video.addEventListener('play', () => {
+        statusText.innerText = "Analysiere deinen Bewegungsablauf...";
+        statusText.style.color = "#ffcc00";
+        
+        if (video.requestVideoFrameCallback) {
+            video.requestVideoFrameCallback(processFrame);
+        } else {
+            // Fallback für ältere Browser
+            setInterval(async () => {
+                if (!video.paused && !video.ended) {
+                    await pose.send({ image: video });
+                }
+            }, 40);
+        }
     });
 </script>
 
-</body>
+</body
 </html>
