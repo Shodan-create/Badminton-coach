@@ -45,14 +45,7 @@
             height: 360px;
         }
         video {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            background: #000;
-            z-index: 1;
+            display: none; /* Wir verstecken den fehlerhaften Browser-Player komplett! */
         }
         canvas {
             position: absolute;
@@ -61,7 +54,6 @@
             width: 100%;
             height: 100%;
             cursor: crosshair;
-            z-index: 2;
         }
         .dashboard {
             display: flex;
@@ -147,8 +139,8 @@
 
     <div class="main-layout">
         <div class="video-wrapper">
-            <!-- Sichtbarer, nativer Player mit aktivierter Render-Garantie -->
-            <video id="video" controls preload="auto" width="640"></video>
+            <!-- Das Canvas übernimmt jetzt das Rendern des Videobildes vollautomatisch -->
+            <video id="video" playsinline></video>
             <canvas id="canvas"></canvas>
         </div>
 
@@ -214,41 +206,69 @@
     const bodyLabels = ["Schulter", "Hüfte", "Knie", "Fuß"];
 
     fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0]; // Absolut sichere Dateiauswahl für Apple & Chrome
+        const file = e.target.files[0]; // Greift direkt auf das File-Objekt zu
         if (file) {
             const fileURL = URL.createObjectURL(file);
             video.src = fileURL;
-            video.play().then(() => {
-                video.pause(); // Spielt kurz an und stoppt, damit das erste Bild geladen wird!
-            });
+            video.load();
         }
     });
 
-    video.addEventListener('loadeddata', () => {
+    video.addEventListener('loadedmetadata', () => {
         const wrapper = document.querySelector('.video-wrapper');
         const aspectRatio = video.videoWidth / video.videoHeight;
         wrapper.style.height = (640 / aspectRatio) + 'px';
         
-        canvas.width = 640;
-        canvas.height = 640 / aspectRatio;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
         
         video.playbackRate = parseFloat(speedSelect.value);
         resetAllMetrics();
         modeStatus.innerText = "Bitte klicke auf die SCHULTER";
         modeStatus.style.color = "#ff3366";
+        
+        // Zeichne sofort das allererste Bild des Videos auf das Canvas
+        setTimeout(() => {
+            renderCalculations();
+        }, 150);
     });
 
-    playBtn.addEventListener('click', () => { if (video.paused) video.play(); else video.pause(); });
+    playBtn.addEventListener('click', () => { 
+        if (video.paused) {
+            video.play();
+            updateVideoLoop();
+        } else {
+            video.pause();
+        }
+    });
+
+    // Kontinuierlicher Render-Loop, um das Video flüssig auf das Canvas zu zeichnen
+    function updateVideoLoop() {
+        if (video.paused || video.ended) return;
+        renderCalculations();
+        requestAnimationFrame(updateVideoLoop);
+    }
+
     speedSelect.addEventListener('change', () => { video.playbackRate = parseFloat(speedSelect.value); });
-    prevFrame.addEventListener('click', () => { video.pause(); video.currentTime = Math.max(0, video.currentTime - 0.04); });
-    nextFrame.addEventListener('click', () => { video.pause(); video.currentTime = Math.min(video.duration, video.currentTime + 0.04); });
+    
+    prevFrame.addEventListener('click', () => { 
+        video.pause(); 
+        video.currentTime = Math.max(0, video.currentTime - 0.04);
+        setTimeout(renderCalculations, 10);
+    });
+    
+    nextFrame.addEventListener('click', () => { 
+        video.pause(); 
+        video.currentTime = Math.min(video.duration, video.currentTime + 0.04);
+        setTimeout(renderCalculations, 10);
+    });
 
     canvas.addEventListener('mousedown', (e) => {
         if (!video.src) return;
 
         const rect = canvas.getBoundingClientRect();
-        const posX = e.clientX - rect.left;
-        const posY = e.clientY - rect.top;
+        const posX = ((e.clientX - rect.left) / rect.width) * canvas.width;
+        const posY = ((e.clientY - rect.top) / rect.height) * canvas.height;
 
         if (bodyPoints.length < 4) {
             bodyPoints.push({ x: posX, y: posY, label: bodyLabels[bodyPoints.length] });
@@ -260,25 +280,14 @@
     });
 
     function renderCalculations() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // 1. SCHRITT: Zeichne das aktuelle Video-Frame direkt auf das Canvas
+        if (video.readyState >= 2) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        } else {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        
         coordData.innerHTML = "";
 
+        // 2. SCHRITT: Zeichne die Linien und Gelenke darüber
         if (bodyPoints.length > 0) {
-            ctx.lineWidth = 5;
-            ctx.lineCap = "round";
-            ctx.beginPath();
-            ctx.strokeStyle = "#ff3366";
-            
-            for (let i = 0; i < bodyPoints.length; i++) {
-                if (i === 2) {
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.strokeStyle = "#00ffcc";
-                    ctx.moveTo(bodyPoints[i-1].x, bodyPoints[i-1].y);
-                }
-
-                if (i === 0) ctx.moveTo(bodyPoints[i].x, bodyPoints[i].y);
-                else ctx.lineTo(bodyPoints[i].x, bodyPoints[i].y);
-
-                ctx.fillStyle = "#ffcc00";
-                ctx.beginPath();
