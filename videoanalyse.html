@@ -83,7 +83,13 @@
         }
 
         video {
-            display: none; /* Versteckt den Player, damit der H.265-Sicherheitsfehler umgangen wird */
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            z-index: 1;
         }
 
         canvas {
@@ -199,17 +205,6 @@
             background: #991b1b;
             border-color: #ef4444;
         }
-
-        .bottom-bar {
-            background: var(--panel-bg);
-            border: 2px solid var(--border-color);
-            border-radius: 10px;
-            padding: 12px;
-            margin-top: 20px;
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-        }
     </style>
 </head>
 <body>
@@ -233,7 +228,8 @@
 
     <div class="workspace">
         <div class="video-box">
-            <video id="video" playsinline></video>
+            <!-- Normaler sichtbarer Player mit Bedienelementen, das lädt IMMER -->
+            <video id="video" controls playsinline></video>
             <canvas id="canvas"></canvas>
         </div>
 
@@ -260,21 +256,9 @@
             </div>
         </div>
     </div>
-
-    <div class="bottom-bar">
-        <button id="playBtn">▶ PLAY / PAUSE</button>
-        <button id="prevFrame">◀ FRAME BACK</button>
-        <button id="nextFrame">FRAME FORWARD ▶</button>
-        <select id="speedSelect">
-            <option value="1">SPEED: 100% (1x)</option>
-            <option value="0.5">SPEED: 50% (0.5x)</option>
-            <option value="0.25" selected>SPEED: 25% (0.25x)</option>
-        </select>
-    </div>
 </div>
 
 <script>
-  <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
@@ -288,89 +272,29 @@
     const speedData = document.getElementById('speedData');
     const classificationReport = document.getElementById('classificationReport');
     const heatMapStatus = document.getElementById('heatMapStatus');
-
-    const playBtn = document.getElementById('playBtn');
-    const prevFrame = document.getElementById('prevFrame');
-    const nextFrame = document.getElementById('nextFrame');
-    const speedSelect = document.getElementById('speedSelect');
     const clearBtn = document.getElementById('clearBtn');
 
     let bodyPoints = []; 
     let shuttlePoint = null;
     const bodyLabels = ["Schulter", "Hüfte", "Knie", "Fuß"];
 
-    // UNKAPUTTBARER APPLE & CORS FIX: Lädt das Video als direkten Datenstream
     fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0]; // Greift stabil auf die erste Datei zu
+        const file = e.target.files[0];
         if (file) {
-            modeStatus.innerText = "STATUS: KONVERTIERE VIDEOSTREAM...";
+            modeStatus.innerText = "STATUS: LADE MEDIENDATEI...";
             modeStatus.style.color = "var(--neon-yellow)";
-            
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                video.src = event.target.result;
-                video.load();
-            };
-            reader.readAsDataURL(file);
+            video.src = URL.createObjectURL(file);
+            video.load();
         }
     });
 
-    video.addEventListener('loadeddata', () => {
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 360;
-        video.playbackRate = parseFloat(speedSelect.value);
+    video.addEventListener('loadedmetadata', () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        video.playbackRate = 0.25; // Automatisch 25% Zeitlupe beim Starten
         resetAllMetrics();
         modeStatus.innerText = "STATUS: KLICKE AUF DIE SCHULTER";
         modeStatus.style.color = "var(--neon-green)";
-        drawVideoFrame();
-    });
-
-    playBtn.addEventListener('click', () => {
-        if(!video.src) return;
-        if (video.paused) {
-            video.play();
-            playBtn.innerText = "⏸ PAUSE";
-            updateLoop();
-        } else {
-            video.pause();
-            playBtn.innerText = "▶ PLAY";
-        }
-    });
-
-    function updateLoop() {
-        if (video.paused || video.ended) return;
-        drawVideoFrame();
-        requestAnimationFrame(updateLoop);
-    }
-
-    function drawVideoFrame() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        try {
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        } catch(e) {
-            console.error("Render-Fehler:", e);
-        }
-        renderOverlay();
-    }
-
-    speedSelect.addEventListener('change', () => { 
-        video.playbackRate = parseFloat(speedSelect.value); 
-    });
-
-    prevFrame.addEventListener('click', () => { 
-        if(!video.src) return;
-        video.pause(); 
-        playBtn.innerText = "▶ PLAY";
-        video.currentTime = Math.max(0, video.currentTime - 0.04);
-        setTimeout(drawVideoFrame, 40);
-    });
-    
-    nextFrame.addEventListener('click', () => { 
-        if(!video.src) return;
-        video.pause(); 
-        playBtn.innerText = "▶ PLAY";
-        video.currentTime = Math.min(video.duration, video.currentTime + 0.04);
-        setTimeout(drawVideoFrame, 40);
     });
 
     canvas.addEventListener('mousedown', (e) => {
@@ -386,10 +310,11 @@
             shuttlePoint = { x: posX, y: posY };
         }
         
-        drawVideoFrame();
+        renderOverlay();
     });
 
     function renderOverlay() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         coordData.innerHTML = "";
 
         if (bodyPoints.length > 0) {
@@ -397,113 +322,3 @@
             ctx.lineCap = "round";
             ctx.beginPath();
             ctx.strokeStyle = "#ff3366";
-            
-            for (let i = 0; i < bodyPoints.length; i++) {
-                if (i === 2) {
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.strokeStyle = "#00ffcc";
-                    ctx.moveTo(bodyPoints[i-1].x, bodyPoints[i-1].y);
-                }
-
-                if (i === 0) ctx.moveTo(bodyPoints[i].x, bodyPoints[i].y);
-                else ctx.lineTo(bodyPoints[i].x, bodyPoints[i].y);
-
-                ctx.fillStyle = "#ffcc00";
-                ctx.beginPath();
-                ctx.arc(bodyPoints[i].x, bodyPoints[i].y, Math.max(7, canvas.width / 90), 0, 2 * Math.PI);
-                ctx.fill();
-
-                coordData.innerHTML += `<div>• ${bodyPoints[i].label}: [${Math.round(bodyPoints[i].x)}, ${Math.round(bodyPoints[i].y)}]</div>`;
-            }
-            ctx.stroke();
-        }
-
-        if (bodyPoints.length < 4) {
-            modeStatus.innerText = `STATUS: KLICKE AUF ${bodyLabels[bodyPoints.length].toUpperCase()}`;
-            modeStatus.style.color = "var(--neon-pink)";
-        } else if (!shuttlePoint) {
-            modeStatus.innerText = "STATUS: SKELETT FERTIG! KLICKE AUF DEN BALL";
-            modeStatus.style.color = "var(--neon-yellow)";
-        } else {
-            modeStatus.innerText = "STATUS: ANALYSE ABGESCHLOSSEN";
-            modeStatus.style.color = "var(--neon-green)";
-        }
-
-        if (bodyPoints.length >= 3) {
-            const p1 = bodyPoints[0];
-            const p2 = bodyPoints[1];
-            const p3 = bodyPoints[2];
-
-            if(p1 && p2 && p3) {
-                const angle1 = Math.atan2(p1.y - p2.y, p1.x - p2.x);
-                const angle2 = Math.atan2(p3.y - p2.y, p3.x - p2.x);
-                let angle = Math.abs((angle1 - angle2) * 180 / Math.PI);
-                if (angle > 180) angle = 360 - angle;
-                angleData.innerText = Math.round(angle) + "° Kniewinkel";
-            }
-        }
-
-        if (shuttlePoint && bodyPoints.length > 0) {
-            ctx.fillStyle = "#ffcc00";
-            ctx.beginPath();
-            ctx.arc(shuttlePoint.x, shuttlePoint.y, Math.max(8, canvas.width / 80), 0, 2 * Math.PI);
-            ctx.fill();
-            
-            ctx.strokeStyle = "#ffcc00";
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(bodyPoints[0].x, bodyPoints[0].y);
-            ctx.lineTo(shuttlePoint.x, shuttlePoint.y);
-            ctx.stroke();
-
-            shuttleCoords.innerText = `Shuttle-Position: [X:${Math.round(shuttlePoint.x)}, Y:${Math.round(shuttlePoint.y)}]`;
-            
-            const baseType = shotTypeSelect.value;
-            let simulatedSpeed = 0;
-            if (baseType === "Smash") simulatedSpeed = Math.floor(Math.random() * (380 - 290) + 290);
-            else if (baseType === "Clear") simulatedSpeed = Math.floor(Math.random() * (190 - 140) + 140);
-            else simulatedSpeed = Math.floor(Math.random() * (90 - 60) + 60);
-
-            speedData.innerText = simulatedSpeed + " km/h";
-        }
-
-        classificationReport.innerText = `Klassifizierung: ${shotTypeSelect.value.toUpperCase()} (Verifiziert)`;
-        if (shuttlePoint) {
-            if (shuttlePoint.x < canvas.width / 2) {
-                heatMapStatus.innerText = "Treffzone: LINKES FELD";
-            } else {
-                heatMapStatus.innerText = "Treffzone: RECHTES FELD";
-            }
-        }
-    }
-
-    function resetAllMetrics() {
-        bodyPoints = [];
-        shuttlePoint = null;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        coordData.innerHTML = "";
-        angleData.innerText = "--°";
-        shuttleCoords.innerText = "Shuttle-Position: N/A";
-        speedData.innerText = "-- km/h";
-        heatMapStatus.innerText = "Spielfeldzone: Keine Daten";
-    }
-
-    clearBtn.addEventListener('click', () => {
-        resetAllMetrics();
-        if(video.src) {
-            modeStatus.innerText = "STATUS: KLICKE AUF DIE SCHULTER";
-            modeStatus.style.color = "var(--neon-green)";
-            drawVideoFrame();
-        } else {
-            modeStatus.innerText = "STATUS: Bitte Video laden";
-            modeStatus.style.color = "var(--neon-pink)";
-        }
-    });
-    
-    shotTypeSelect.addEventListener('change', () => { 
-        if(bodyPoints.length > 0) renderOverlay(); 
-    });
-</script>
-</body>
-</html>
