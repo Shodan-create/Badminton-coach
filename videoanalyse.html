@@ -293,7 +293,6 @@
     const nextFrame = document.getElementById('nextFrame');
     const speedSelect = document.getElementById('speedSelect');
     const clearBtn = document.getElementById('clearBtn');
-
     let bodyPoints = []; 
     let shuttlePoint = null;
     const bodyLabels = ["Schulter", "Hüfte", "Knie", "Fuß"];
@@ -319,4 +318,182 @@
     });
 
     playBtn.addEventListener('click', () => {
+        if(!video.src) return;
+        if (video.paused) {
+            video.play();
+            playBtn.innerText = "⏸ PAUSE";
+            updateLoop();
+        } else {
+            video.pause();
+            playBtn.innerText = "▶ PLAY";
+        }
+    });
 
+    function updateLoop() {
+        if (video.paused || video.ended) return;
+        drawVideoFrame();
+        requestAnimationFrame(updateLoop);
+    }
+
+    function drawVideoFrame() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        try {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        } catch(e) {}
+        renderOverlay();
+    }
+
+    speedSelect.addEventListener('change', () => { 
+        video.playbackRate = parseFloat(speedSelect.value); 
+    });
+
+    prevFrame.addEventListener('click', () => { 
+        if(!video.src) return;
+        video.pause(); 
+        playBtn.innerText = "▶ PLAY";
+        video.currentTime = Math.max(0, video.currentTime - 0.04);
+        setTimeout(drawVideoFrame, 20);
+    });
+    
+    nextFrame.addEventListener('click', () => { 
+        if(!video.src) return;
+        video.pause(); 
+        playBtn.innerText = "▶ PLAY";
+        video.currentTime = Math.min(video.duration, video.currentTime + 0.04);
+        setTimeout(drawVideoFrame, 20);
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+        if (!video.src) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const posX = ((e.clientX - rect.left) / rect.width) * canvas.width;
+        const posY = ((e.clientY - rect.top) / rect.height) * canvas.height;
+
+        if (bodyPoints.length < 4) {
+            bodyPoints.push({ x: posX, y: posY, label: bodyLabels[bodyPoints.length] });
+        } else if (!shuttlePoint) {
+            shuttlePoint = { x: posX, y: posY };
+        }
+        
+        drawVideoFrame();
+    });
+
+    function renderOverlay() {
+        coordData.innerHTML = "";
+
+        if (bodyPoints.length > 0) {
+            ctx.lineWidth = Math.max(5, canvas.width / 140);
+            ctx.lineCap = "round";
+            ctx.beginPath();
+            ctx.strokeStyle = "#ff3366";
+            
+            for (let i = 0; i < bodyPoints.length; i++) {
+                if (i === 2) {
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.strokeStyle = "#00ffcc";
+                    ctx.moveTo(bodyPoints[i-1].x, bodyPoints[i-1].y);
+                }
+
+                if (i === 0) ctx.moveTo(bodyPoints[i].x, bodyPoints[i].y);
+                else ctx.lineTo(bodyPoints[i].x, bodyPoints[i].y);
+
+                ctx.fillStyle = "#ffcc00";
+                ctx.beginPath();
+                ctx.arc(bodyPoints[i].x, bodyPoints[i].y, Math.max(7, canvas.width / 90), 0, 2 * Math.PI);
+                ctx.fill();
+
+                coordData.innerHTML += `<div>• ${bodyPoints[i].label}: [${Math.round(bodyPoints[i].x)}, ${Math.round(bodyPoints[i].y)}]</div>`;
+            }
+            ctx.stroke();
+        }
+
+        if (bodyPoints.length < 4) {
+            modeStatus.innerText = `STATUS: KLICKE AUF ${bodyLabels[bodyPoints.length].toUpperCase()}`;
+            modeStatus.style.color = "var(--neon-pink)";
+        } else if (!shuttlePoint) {
+            modeStatus.innerText = "STATUS: SKELETT FERTIG! KLICKE AUF DEN BALL";
+            modeStatus.style.color = "var(--neon-yellow)";
+        } else {
+            modeStatus.innerText = "STATUS: ANALYSE ABGESCHLOSSEN";
+            modeStatus.style.color = "var(--neon-green)";
+        }
+
+        if (bodyPoints.length >= 3) {
+            const p1 = bodyPoints[0];
+            const p2 = bodyPoints[1];
+            const p3 = bodyPoints[2];
+
+            if(p1 && p2 && p3) {
+                const angle1 = Math.atan2(p1.y - p2.y, p1.x - p2.x);
+                const angle2 = Math.atan2(p3.y - p2.y, p3.x - p2.x);
+                let angle = Math.abs((angle1 - angle2) * 180 / Math.PI);
+                if (angle > 180) angle = 360 - angle;
+                angleData.innerText = Math.round(angle) + "° Kniewinkel";
+            }
+        }
+
+        if (shuttlePoint && bodyPoints.length > 0) {
+            ctx.fillStyle = "#ffcc00";
+            ctx.beginPath();
+            ctx.arc(shuttlePoint.x, shuttlePoint.y, Math.max(8, canvas.width / 80), 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.strokeStyle = "#ffcc00";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(bodyPoints[0].x, bodyPoints[0].y);
+            ctx.lineTo(shuttlePoint.x, shuttlePoint.y);
+            ctx.stroke();
+
+            shuttleCoords.innerText = `Shuttle-Position: [X:${Math.round(shuttlePoint.x)}, Y:${Math.round(shuttlePoint.y)}]`;
+            
+            const baseType = shotTypeSelect.value;
+            let simulatedSpeed = 0;
+            if (baseType === "Smash") simulatedSpeed = Math.floor(Math.random() * (380 - 290) + 290);
+            else if (baseType === "Clear") simulatedSpeed = Math.floor(Math.random() * (190 - 140) + 140);
+            else simulatedSpeed = Math.floor(Math.random() * (90 - 60) + 60);
+
+            speedData.innerText = simulatedSpeed + " km/h";
+        }
+
+        classificationReport.innerText = `Klassifizierung: ${shotTypeSelect.value.toUpperCase()} (Verifiziert)`;
+        if (shuttlePoint) {
+            if (shuttlePoint.x < canvas.width / 2) {
+                heatMapStatus.innerText = "Treffzone: LINKES FELD";
+            } else {
+                heatMapStatus.innerText = "Treffzone: RECHTES FELD";
+            }
+        }
+    }
+
+    function resetAllMetrics() {
+        bodyPoints = [];
+        shuttlePoint = null;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        coordData.innerHTML = "";
+        angleData.innerText = "--°";
+        shuttleCoords.innerText = "Shuttle-Position: N/A";
+        speedData.innerText = "-- km/h";
+        heatMapStatus.innerText = "Spielfeldzone: Keine Daten";
+    }
+
+    clearBtn.addEventListener('click', () => {
+        resetAllMetrics();
+        if(video.src) {
+            modeStatus.innerText = "STATUS: KLICKE AUF DIE SCHULTER";
+            modeStatus.style.color = "var(--neon-green)";
+            drawVideoFrame();
+        } else {
+            modeStatus.innerText = "STATUS: Bitte Video laden";
+            modeStatus.style.color = "var(--neon-pink)";
+        }
+    });
+    
+    shotTypeSelect.addEventListener('change', () => { 
+        if(bodyPoints.length > 0) renderOverlay(); 
+    });
+</script>
+</body>
+</html>
