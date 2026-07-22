@@ -143,13 +143,11 @@
             <option value="Clear">🏸 Schlagtyp: CLEAR</option>
             <option value="Drop">🏸 Schlagtyp: DROP</option>
         </select>
-        <!-- Notfall-Button für Demovideo -->
         <button id="demoBtn" style="background: #0284c7; border-color: #38bdf8; margin-left: 10px;">▶ Demo-Video laden</button>
     </div>
 
     <div class="main-layout">
         <div class="video-wrapper">
-            <!-- Nativer Player, damit CORS-Sicherheitsfehler unmöglich sind -->
             <video id="video" controls playsinline crossorigin="anonymous"></video>
             <canvas id="canvas"></canvas>
         </div>
@@ -216,19 +214,15 @@
     let shuttlePoint = null;
     const bodyLabels = ["Schulter", "Hüfte", "Knie", "Fuß"];
 
-    // 1. Lokales Video hochladen
     fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const fileURL = URL.createObjectURL(file);
-            video.src = fileURL;
+        const file = e.target.files;
+        if (file && file[0]) {
+            video.src = URL.createObjectURL(file[0]);
             video.load();
         }
     });
 
-    // 2. Erzwungenes Web-Demovideo laden, falls lokale Dateien blockiert werden
     demoBtn.addEventListener('click', () => {
-        // Lädt ein standardisiertes offizielle MP4-Testvideo aus dem Web
         video.src = "https://googleapis.com";
         video.load();
     });
@@ -249,8 +243,18 @@
 
     playBtn.addEventListener('click', () => { if (video.paused) video.play(); else video.pause(); });
     speedSelect.addEventListener('change', () => { video.playbackRate = parseFloat(speedSelect.value); });
-    prevFrame.addEventListener('click', () => { video.pause(); video.currentTime = Math.max(0, video.currentTime - 0.04); setTimeout(renderCalculations, 10); });
-    nextFrame.addEventListener('click', () => { video.pause(); video.currentTime = Math.min(video.duration, video.currentTime + 0.04); setTimeout(renderCalculations, 10); });
+    
+    prevFrame.addEventListener('click', () => { 
+        video.pause(); 
+        video.currentTime = Math.max(0, video.currentTime - 0.04); 
+        setTimeout(renderCalculations, 10); 
+    });
+    
+    nextFrame.addEventListener('click', () => { 
+        video.pause(); 
+        video.currentTime = Math.min(video.duration, video.currentTime + 0.04); 
+        setTimeout(renderCalculations, 10); 
+    });
 
     canvas.addEventListener('mousedown', (e) => {
         if (!video.src) return;
@@ -276,3 +280,10 @@
             ctx.lineWidth = 5;
             ctx.lineCap = "round";
             ctx.beginPath();
+            ctx.strokeStyle = "#ff3366";
+            
+            for (let i = 0; i < bodyPoints.length; i++) {
+                if (i === 2) {
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.strokeStyle = "#00ffcc";
