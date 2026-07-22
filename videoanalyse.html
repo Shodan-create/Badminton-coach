@@ -41,14 +41,18 @@
             overflow: hidden;
             border: 3px solid #1e1e24;
             box-shadow: 0 0 25px rgba(0, 255, 204, 0.15);
+            width: 640px;
+            height: 480px; /* Feste Basisgröße für stabiles Layout */
         }
         video {
-            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
-            max-width: 640px;
-            height: auto;
-            max-height: 60vh;
+            height: 100%;
+            object-fit: contain; /* Passt das Video perfekt in die Box ein */
             background: #000;
+            z-index: 1;
         }
         canvas {
             position: absolute;
@@ -57,6 +61,8 @@
             width: 100%;
             height: 100%;
             cursor: crosshair;
+            z-index: 2; /* Liegt als Glasscheibe exakt über dem Video */
+            pointer-events: auto;
         }
         .dashboard {
             display: flex;
@@ -142,7 +148,7 @@
 
     <div class="main-layout">
         <div class="video-wrapper">
-            <!-- Die Steuerung läuft jetzt stabil über JavaScript -->
+            <!-- Das Video ist jetzt als echtes Element sichtbar, das Canvas liegt darüber -->
             <video id="video" playsinline></video>
             <canvas id="canvas"></canvas>
         </div>
@@ -208,25 +214,29 @@
     let shuttlePoint = null;
     const bodyLabels = ["Schulter", "Hüfte", "Knie", "Fuß"];
 
-    // Absolut sicheres Laden des Videos direkt beim Event
     fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
+        const file = e.target.files[0]; // Greift sicher auf die erste Datei zu
         if (file) {
             const fileURL = URL.createObjectURL(file);
             video.src = fileURL;
-            
-            // Sobald der Pfad gesetzt ist, erzwingen wir das Laden der Maße
-            video.onloadedmetadata = function() {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                video.playbackRate = parseFloat(speedSelect.value);
-                resetAllMetrics();
-                modeStatus.innerText = "Bitte klicke auf die SCHULTER";
-                modeStatus.style.color = "#ff3366";
-            };
-            
             video.load();
         }
+    });
+
+    // Sobald das Video die Metadaten lädt, passen wir das Zeichenfeld exakt an das Video an
+    video.addEventListener('loadedmetadata', () => {
+        const wrapper = document.querySelector('.video-wrapper');
+        // Berechnet das Seitenverhältnis des hochgeladenen Videos dynamisch
+        const aspectRatio = video.videoWidth / video.videoHeight;
+        wrapper.style.height = (640 / aspectRatio) + 'px';
+        
+        canvas.width = 640;
+        canvas.height = 640 / aspectRatio;
+        
+        video.playbackRate = parseFloat(speedSelect.value);
+        resetAllMetrics();
+        modeStatus.innerText = "Bitte klicke auf die SCHULTER";
+        modeStatus.style.color = "#ff3366";
     });
 
     playBtn.addEventListener('click', () => { if (video.paused) video.play(); else video.pause(); });
@@ -234,12 +244,13 @@
     prevFrame.addEventListener('click', () => { video.pause(); video.currentTime = Math.max(0, video.currentTime - 0.04); });
     nextFrame.addEventListener('click', () => { video.pause(); video.currentTime = Math.min(video.duration, video.currentTime + 0.04); });
 
+    // Berechnet Klicks relativ zur skalierten Canvas-Größe
     canvas.addEventListener('mousedown', (e) => {
         if (!video.src) return;
 
         const rect = canvas.getBoundingClientRect();
-        const posX = ((e.clientX - rect.left) / rect.width) * canvas.width;
-        const posY = ((e.clientY - rect.top) / rect.height) * canvas.height;
+        const posX = e.clientX - rect.left;
+        const posY = e.clientY - rect.top;
 
         if (bodyPoints.length < 4) {
             bodyPoints.push({ x: posX, y: posY, label: bodyLabels[bodyPoints.length] });
@@ -268,13 +279,3 @@
                     ctx.moveTo(bodyPoints[i-1].x, bodyPoints[i-1].y);
                 }
 
-                if (i === 0) ctx.moveTo(bodyPoints[i].x, bodyPoints[i].y);
-                else ctx.lineTo(bodyPoints[i].x, bodyPoints[i].y);
-
-                ctx.fillStyle = "#ffcc00";
-                ctx.beginPath();
-                ctx.arc(bodyPoints[i].x, bodyPoints[i].y, 8, 0, 2 * Math.PI);
-                ctx.fill();
-
-                coordData.innerHTML += `<div class="data-item"><b>${bodyPoints[i].label}:</b> [X:${Math.round(bodyPoints[i].x)}, Y:${Math.round(bodyPoints[i].y)}]</div>`;
-            }
