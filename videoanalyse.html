@@ -44,9 +44,11 @@
         }
         video {
             display: block;
-            max-width: 100%;
+            width: 100%;
+            max-width: 640px;
             height: auto;
             max-height: 60vh;
+            background: #000;
         }
         canvas {
             position: absolute;
@@ -139,23 +141,20 @@
     </div>
 
     <div class="main-layout">
-        <!-- Video & Zeichen-Arbeitsplatz -->
         <div class="video-wrapper">
-            <video id="video" controls autoplay muted playsinline></video>
+            <!-- Die Steuerung läuft jetzt stabil über JavaScript -->
+            <video id="video" playsinline></video>
             <canvas id="canvas"></canvas>
         </div>
 
-        <!-- Dashboard mit allen Analyse-Modulen -->
         <div class="dashboard">
-            <!-- Teil 1 & 2 Panel -->
             <div class="panel">
                 <div class="panel-title">📐 EP. 1&2: Coordinates & Angles</div>
-                <div id="modeStatus" class="mode-indicator">Bitte klicke auf die SCHULTER</div>
+                <div id="modeStatus" class="mode-indicator">Bitte lade ein Video hoch</div>
                 <div id="coordData"></div>
                 <div class="value-highlight" id="angleData">--°</div>
             </div>
 
-            <!-- Teil 5 Panel -->
             <div class="panel">
                 <div class="panel-title">🚀 EP. 5: Shuttle Speed & Flight</div>
                 <div class="data-item" id="shuttleCoords">Shuttle-Position: Ausstehend</div>
@@ -163,7 +162,6 @@
                 <div class="value-highlight" id="speedData" style="color: #ffcc00;">-- km/h</div>
             </div>
 
-            <!-- Teil 3 & 4 Panel -->
             <div class="panel">
                 <div class="panel-title">📊 EP. 3&4: Field Metrics</div>
                 <div class="data-item" id="classificationReport">Klassifizierung: Manuell</div>
@@ -172,7 +170,6 @@
         </div>
     </div>
 
-    <!-- Steuerung -->
     <div class="toolbar">
         <button id="playBtn">▶ Play / Pause</button>
         <button id="prevFrame">◀ Frame zurück</button>
@@ -193,7 +190,6 @@
     const fileInput = document.getElementById('fileInput');
     const shotTypeSelect = document.getElementById('shotTypeSelect');
     
-    // Panel Elements
     const modeStatus = document.getElementById('modeStatus');
     const coordData = document.getElementById('coordData');
     const angleData = document.getElementById('angleData');
@@ -202,7 +198,6 @@
     const classificationReport = document.getElementById('classificationReport');
     const heatMapStatus = document.getElementById('heatMapStatus');
 
-    // Controls
     const playBtn = document.getElementById('playBtn');
     const prevFrame = document.getElementById('prevFrame');
     const nextFrame = document.getElementById('nextFrame');
@@ -213,19 +208,25 @@
     let shuttlePoint = null;
     const bodyLabels = ["Schulter", "Hüfte", "Knie", "Fuß"];
 
+    // Absolut sicheres Laden des Videos direkt beim Event
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
-            video.src = URL.createObjectURL(file);
+            const fileURL = URL.createObjectURL(file);
+            video.src = fileURL;
+            
+            // Sobald der Pfad gesetzt ist, erzwingen wir das Laden der Maße
+            video.onloadedmetadata = function() {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                video.playbackRate = parseFloat(speedSelect.value);
+                resetAllMetrics();
+                modeStatus.innerText = "Bitte klicke auf die SCHULTER";
+                modeStatus.style.color = "#ff3366";
+            };
+            
             video.load();
-            resetAllMetrics();
         }
-    });
-
-    video.addEventListener('loadedmetadata', () => {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        video.playbackRate = parseFloat(speedSelect.value);
     });
 
     playBtn.addEventListener('click', () => { if (video.paused) video.play(); else video.pause(); });
@@ -233,7 +234,6 @@
     prevFrame.addEventListener('click', () => { video.pause(); video.currentTime = Math.max(0, video.currentTime - 0.04); });
     nextFrame.addEventListener('click', () => { video.pause(); video.currentTime = Math.min(video.duration, video.currentTime + 0.04); });
 
-    // Intelligente Klick-Erfassung (Verarbeitet Körper- und Ballpunkte)
     canvas.addEventListener('mousedown', (e) => {
         if (!video.src) return;
 
@@ -242,10 +242,8 @@
         const posY = ((e.clientY - rect.top) / rect.height) * canvas.height;
 
         if (bodyPoints.length < 4) {
-            // Punkte 1-4: Skelett-Aufbau
             bodyPoints.push({ x: posX, y: posY, label: bodyLabels[bodyPoints.length] });
         } else if (!shuttlePoint) {
-            // Punkt 5: Federball-Position für Geschwindigkeitsmessung
             shuttlePoint = { x: posX, y: posY };
         }
         
@@ -256,28 +254,27 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         coordData.innerHTML = "";
 
-        // --- TEIL 1 & 2: SKELETT-ZEICHNUNG ---
         if (bodyPoints.length > 0) {
             ctx.lineWidth = 5;
             ctx.lineCap = "round";
-
             ctx.beginPath();
-            ctx.strokeStyle = "#ff3366"; // Oberkörper-Farbe
+            ctx.strokeStyle = "#ff3366";
             
             for (let i = 0; i < bodyPoints.length; i++) {
                 if (i === 2) {
                     ctx.stroke();
                     ctx.beginPath();
-                    ctx.strokeStyle = "#00ffcc"; // Beinarbeits-Farbe wechselt wie bei vhofit
+                    ctx.strokeStyle = "#00ffcc";
                     ctx.moveTo(bodyPoints[i-1].x, bodyPoints[i-1].y);
                 }
 
                 if (i === 0) ctx.moveTo(bodyPoints[i].x, bodyPoints[i].y);
                 else ctx.lineTo(bodyPoints[i].x, bodyPoints[i].y);
 
-                // Gelenke einzeichnen
                 ctx.fillStyle = "#ffcc00";
                 ctx.beginPath();
                 ctx.arc(bodyPoints[i].x, bodyPoints[i].y, 8, 0, 2 * Math.PI);
                 ctx.fill();
 
+                coordData.innerHTML += `<div class="data-item"><b>${bodyPoints[i].label}:</b> [X:${Math.round(bodyPoints[i].x)}, Y:${Math.round(bodyPoints[i].y)}]</div>`;
+            }
