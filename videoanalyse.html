@@ -45,14 +45,7 @@
             height: 360px;
         }
         video {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            background: #000;
-            z-index: 1;
+            display: none; /* Wir verstecken den fehlerhaften Player komplett */
         }
         canvas {
             position: absolute;
@@ -61,7 +54,6 @@
             width: 100%;
             height: 100%;
             cursor: crosshair;
-            z-index: 2;
         }
         .dashboard {
             display: flex;
@@ -148,7 +140,7 @@
 
     <div class="main-layout">
         <div class="video-wrapper">
-            <video id="video" controls playsinline crossorigin="anonymous"></video>
+            <video id="video" playsinline crossorigin="anonymous"></video>
             <canvas id="canvas"></canvas>
         </div>
 
@@ -215,9 +207,9 @@
     const bodyLabels = ["Schulter", "Hüfte", "Knie", "Fuß"];
 
     fileInput.addEventListener('change', (e) => {
-        const file = e.target.files;
-        if (file && file[0]) {
-            video.src = URL.createObjectURL(file[0]);
+        const file = e.target.files[0];
+        if (file) {
+            video.src = URL.createObjectURL(file);
             video.load();
         }
     });
@@ -227,33 +219,50 @@
         video.load();
     });
 
-    video.addEventListener('loadeddata', () => {
+    video.addEventListener('loadedmetadata', () => {
         const wrapper = document.querySelector('.video-wrapper');
         const aspectRatio = video.videoWidth / video.videoHeight;
         wrapper.style.height = (640 / aspectRatio) + 'px';
         
-        canvas.width = 640;
-        canvas.height = 640 / aspectRatio;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
         
         video.playbackRate = parseFloat(speedSelect.value);
         resetAllMetrics();
         modeStatus.innerText = "Bitte klicke auf die SCHULTER";
         modeStatus.style.color = "#ff3366";
+        
+        // Zeichne sofort das erste Bild auf das Canvas
+        setTimeout(renderCalculations, 200);
     });
 
-    playBtn.addEventListener('click', () => { if (video.paused) video.play(); else video.pause(); });
+    playBtn.addEventListener('click', () => { 
+        if (video.paused) {
+            video.play();
+            renderLoop();
+        } else {
+            video.pause();
+        }
+    });
+
+    function renderLoop() {
+        if (video.paused || video.ended) return;
+        renderCalculations();
+        requestAnimationFrame(renderLoop);
+    }
+
     speedSelect.addEventListener('change', () => { video.playbackRate = parseFloat(speedSelect.value); });
     
     prevFrame.addEventListener('click', () => { 
         video.pause(); 
         video.currentTime = Math.max(0, video.currentTime - 0.04); 
-        setTimeout(renderCalculations, 10); 
+        setTimeout(renderCalculations, 30); 
     });
     
     nextFrame.addEventListener('click', () => { 
         video.pause(); 
         video.currentTime = Math.min(video.duration, video.currentTime + 0.04); 
-        setTimeout(renderCalculations, 10); 
+        setTimeout(renderCalculations, 30); 
     });
 
     canvas.addEventListener('mousedown', (e) => {
@@ -273,17 +282,9 @@
     });
 
     function renderCalculations() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        coordData.innerHTML = "";
-
-        if (bodyPoints.length > 0) {
-            ctx.lineWidth = 5;
-            ctx.lineCap = "round";
-            ctx.beginPath();
-            ctx.strokeStyle = "#ff3366";
-            
-            for (let i = 0; i < bodyPoints.length; i++) {
-                if (i === 2) {
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.strokeStyle = "#00ffcc";
+        // Zeichnet das Videobild direkt als Grafik auf das Canvas
+        if (video.readyState >= 2) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        } else {
+            ctx.fillStyle = "#000000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
