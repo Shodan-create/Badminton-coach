@@ -151,15 +151,15 @@
 
     <div class="main-layout">
         <div class="video-wrapper">
-            <!-- Ohne "controls", damit die Leiste nicht verbuggt - wir steuern über eigene Buttons unten -->
-            <video id="video" playsinline></video>
+            <!-- Nativer Browserplayer, der über das neue Blob-System gefüttert wird -->
+            <video id="video" controls playsinline></video>
             <canvas id="canvas"></canvas>
         </div>
 
         <div class="dashboard">
             <div class="panel">
                 <div class="panel-title">📐 EP. 1&2: Coordinates & Angles</div>
-                <div id="modeStatus" class="mode-indicator" style="color: #a1a1aa;">Video hochladen & Steuerung unten nutzen</div>
+                <div id="modeStatus" class="mode-indicator" style="color: #a1a1aa;">Bitte wähle ein Video aus</div>
                 <div id="coordData"></div>
                 <div class="value-highlight" id="angleData">--°</div>
             </div>
@@ -179,16 +179,7 @@
         </div>
     </div>
 
-    <!-- Das unkaputtbare Kontrollzentrum -->
     <div class="toolbar">
-        <button id="playBtn">▶ Play / Pause</button>
-        <button id="prevFrame">◀ Frame zurück</button>
-        <button id="nextFrame">Frame vor ▶</button>
-        <select id="speedSelect">
-            <option value="1">Normal (1x)</option>
-            <option value="0.5">Slow-Mo (0.5x)</option>
-            <option value="0.25" selected>Slow-Mo (0.25x)</option>
-        </select>
         <button id="toggleModeBtn" class="btn-mode">🎯 Analyse-Modus aktivieren</button>
         <button id="clearBtn" style="background: #7f1d1d; border-color: #ef4444;">❌ Reset Analytics</button>
     </div>
@@ -211,68 +202,43 @@
     const heatMapStatus = document.getElementById('heatMapStatus');
     const clearBtn = document.getElementById('clearBtn');
 
-    const playBtn = document.getElementById('playBtn');
-    const prevFrame = document.getElementById('prevFrame');
-    const nextFrame = document.getElementById('nextFrame');
-    const speedSelect = document.getElementById('speedSelect');
-
     let bodyPoints = []; 
     let shuttlePoint = null;
     let analysisModeActive = false;
     const bodyLabels = ["Schulter", "Hüfte", "Knie", "Fuß"];
 
+    // Das unkaputtbare Datenpaket-Ladesystem (Zwingt iPhone-Formate zum Abspielen)
     fileInput.addEventListener('change', (e) => {
-        const file = e.target.files;
-        if (file && file[0]) {
-            video.src = URL.createObjectURL(file[0]);
-            video.load();
+        const file = e.target.files[0];
+        if (file) {
+            modeStatus.innerText = "Video wird für den Browser vorbereitet...";
+            modeStatus.style.color = "#ffcc00";
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                // Wandelt das Video in ein universelles Web-Datenpaket um
+                const buffer = event.target.result;
+                const videoBlob = new Blob([new Uint8Array(buffer)], { type: 'video/mp4' });
+                video.src = URL.createObjectURL(videoBlob);
+                video.load();
+            };
+            reader.readAsArrayBuffer(file);
         }
     });
 
     video.addEventListener('loadedmetadata', () => {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        video.playbackRate = parseFloat(speedSelect.value);
+        video.playbackRate = 0.25; // Automatisch in 0.25x Zeitlupe für präzise Badminton-Analysen
         resetAllMetrics();
-    });
-
-    // Echte Button-Steuerung für Play/Pause
-    playBtn.addEventListener('click', () => {
-        if(!video.src) return;
-        if (video.paused) {
-            if(analysisModeActive) toggleAnalysisMode(); // Deaktiviert Analyse beim Abspielen
-            video.play();
-            playBtn.innerText = "⏸ Pause";
-        } else {
-            video.pause();
-            playBtn.innerText = "▶ Play";
-        }
-    });
-
-    speedSelect.addEventListener('change', () => { 
-        video.playbackRate = parseFloat(speedSelect.value); 
-    });
-
-    // Frame-by-Frame Knöpfe
-    prevFrame.addEventListener('click', () => { 
-        if(!video.src) return;
-        video.pause(); 
-        playBtn.innerText = "▶ Play";
-        video.currentTime = Math.max(0, video.currentTime - 0.04); 
-    });
-    
-    nextFrame.addEventListener('click', () => { 
-        if(!video.src) return;
-        video.pause(); 
-        playBtn.innerText = "▶ Play";
-        video.currentTime = Math.min(video.duration, video.currentTime + 0.04); 
+        modeStatus.innerText = "Video bereit! Pausiere am Schlag und aktiviere den Analyse-Modus.";
+        modeStatus.style.color = "#00ffcc";
     });
 
     function toggleAnalysisMode() {
         analysisModeActive = !analysisModeActive;
         if(analysisModeActive) {
             video.pause();
-            playBtn.innerText = "▶ Play";
             canvas.classList.add('active-mode');
             toggleModeBtn.innerText = "🔓 Player freigeben";
             toggleModeBtn.style.background = "#15803d";
@@ -284,5 +250,36 @@
             toggleModeBtn.innerText = "🎯 Analyse-Modus aktivieren";
             toggleModeBtn.style.background = "#7c2d12";
             toggleModeBtn.style.borderColor = "#ea580c";
-            modeStatus.innerText = "Modus inaktiv. Video bereit.";
+            modeStatus.innerText = "Modus inaktiv. Video freigegeben.";
             modeStatus.style.color = "#a1a1aa";
+        }
+    }
+
+    toggleModeBtn.addEventListener('click', () => {
+        if(!video.src) return;
+        toggleAnalysisMode();
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+        if (!analysisModeActive) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const posX = ((e.clientX - rect.left) / rect.width) * canvas.width;
+        const posY = ((e.clientY - rect.top) / rect.height) * canvas.height;
+
+        if (bodyPoints.length < 4) {
+            bodyPoints.push({ x: posX, y: posY, label: bodyLabels[bodyPoints.length] });
+        } else if (!shuttlePoint) {
+            shuttlePoint = { x: posX, y: posY };
+        }
+        
+        renderCalculations();
+    });
+
+    function renderCalculations() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        coordData.innerHTML = "";
+
+        if (bodyPoints.length > 0) {
+            ctx.lineWidth = Math.max(4, canvas.width / 150);
+            ctx.lineCap = "round";
