@@ -2,696 +2,1231 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Badminton Coach – Videoanalyse</title>
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+>
+
+<title>Badminton Coach – KI Videoanalyse</title>
+
+<!-- TensorFlow.js -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+
+<!-- COCO-SSD Object Detection -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
 <style>
-    * {
-        box-sizing: border-box;
-    }
-    html, body {
-        margin: 0;
-        padding: 0;
-        min-height: 100%;
-        background: #0A2A20;
-        color: #F5F2E8;
-        font-family: Arial, sans-serif;
-    }
-    body {
-        padding: 20px;
-    }
-    .app {
-        width: 100%;
-        max-width: 900px;
-        margin: 0 auto;
-    }
-    h1 {
-        text-align: center;
-        margin: 0 0 20px;
-        color: #D9AA3E;
-    }
-    .panel {
-        background: #0F3527;
-        border: 1px solid rgba(248,246,240,0.15);
-        border-radius: 14px;
-        padding: 18px;
-        margin-bottom: 20px;
-    }
-    .status {
-        text-align: center;
-        font-weight: bold;
-        margin-bottom: 15px;
-        color: #00ffcc;
-    }
-    input,
-    select,
-    button {
-        font-family: Arial, sans-serif;
-    }
-    input[type="file"] {
-        width: 100%;
-        padding: 12px;
-        background: #123C2D;
-        color: white;
-        border-radius: 8px;
-        border: 1px solid rgba(255,255,255,0.15);
-        margin-bottom: 15px;
-    }
-    select {
-        padding: 10px;
-        background: #123C2D;
-        color: white;
-        border: 1px solid rgba(255,255,255,0.2);
-        border-radius: 8px;
-    }
-    .video-container {
-        width: 100%;
-        background: #000;
-        border-radius: 12px;
-        overflow: hidden;
-        margin-bottom: 15px;
-        position: relative;
-    }
-    /*
-      Das Video selbst bleibt unsichtbar.
-      Das Canvas zeigt das Video inklusive Analyse-Markierungen.
-    */
-    #video {
-        display: none;
-    }
-    #canvas {
-        display: block;
-        width: 100%;
-        height: auto;
-        min-height: 250px;
-        background: #000;
-        cursor: crosshair;
-    }
-    .controls {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 12px;
-    }
-    button {
-        background: #123C2D;
-        color: #F5F2E8;
-        border: 1px solid rgba(255,255,255,0.2);
-        border-radius: 8px;
-        padding: 10px 14px;
-        cursor: pointer;
-        font-weight: bold;
-    }
-    button:hover {
-        background: #17493A;
-    }
-    .clear-btn {
-        border-color: #E0637A;
-        color: #E0637A;
-    }
-    .back-btn {
-        display: inline-block;
-        text-decoration: none;
-        background: #D9AA3E;
-        color: #2B2005;
-        padding: 10px 16px;
-        border-radius: 8px;
-        font-weight: bold;
-        margin-bottom: 20px;
-    }
-    .data-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
-    }
-    .data-box {
-        background: rgba(248,246,240,0.06);
-        border-radius: 8px;
-        padding: 12px;
-        min-height: 60px;
-    }
-    .data-title {
-        color: #CFE0D5;
-        font-size: 12px;
-        margin-bottom: 5px;
-        text-transform: uppercase;
-    }
-    .data-value {
-        font-size: 15px;
-        font-weight: bold;
-    }
-    #coordData {
-        font-size: 12px;
-        line-height: 1.5;
-    }
-    @media (max-width: 600px) {
-        body {
-            padding: 10px;
-        }
-        .panel {
-            padding: 12px;
-        }
-        .data-grid {
-            grid-template-columns: 1fr;
-        }
-        #canvas {
-            min-height: 180px;
-        }
-        button {
-            flex: 1;
-        }
-    }
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+
+  background:
+    linear-gradient(
+      180deg,
+      #0A2A20 0%,
+      #0F3527 100%
+    );
+
+  color: #F5F2E8;
+
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
+
+  padding: 20px;
+}
+
+.container {
+  width: 100%;
+  max-width: 1000px;
+  margin: auto;
+}
+
+.back-button {
+  display: inline-block;
+
+  color: #CFE0D5;
+
+  text-decoration: none;
+
+  margin-bottom: 20px;
+
+  font-size: 14px;
+}
+
+.back-button:hover {
+  color: #D9AA3E;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 25px;
+}
+
+.header h1 {
+  margin: 0 0 8px 0;
+  font-size: 30px;
+}
+
+.header p {
+  margin: 0;
+  color: #CFE0D5;
+}
+
+/* PANEL */
+
+.panel {
+  background: #123C2D;
+
+  border:
+    1px solid
+    rgba(248,246,240,0.12);
+
+  border-radius: 14px;
+
+  padding: 20px;
+
+  margin-bottom: 20px;
+}
+
+/* UPLOAD */
+
+.upload-area {
+  text-align: center;
+
+  padding: 25px;
+
+  border:
+    2px dashed
+    rgba(248,246,240,0.25);
+
+  border-radius: 12px;
+}
+
+.file-input {
+  display: none;
+}
+
+.upload-button {
+  display: inline-block;
+
+  background: #D9AA3E;
+
+  color: #2B2005;
+
+  padding:
+    13px
+    20px;
+
+  border-radius: 10px;
+
+  font-weight: bold;
+
+  cursor: pointer;
+
+  margin-top: 12px;
+}
+
+.upload-button:hover {
+  opacity: 0.9;
+}
+
+/* VIDEO */
+
+.video-wrapper {
+
+  display: none;
+
+  position: relative;
+
+  width: 100%;
+
+  margin-top: 20px;
+
+  background: black;
+
+  border-radius: 12px;
+
+  overflow: hidden;
+
+  line-height: 0;
+}
+
+#video {
+
+  display: block;
+
+  width: 100%;
+
+  height: auto;
+
+  background: black;
+}
+
+/*
+Canvas liegt exakt über dem Video.
+Hier werden die grünen Boxen gezeichnet.
+*/
+
+#overlay {
+
+  position: absolute;
+
+  left: 0;
+  top: 0;
+
+  width: 100%;
+  height: 100%;
+
+  pointer-events: none;
+}
+
+/* CONTROLS */
+
+.controls {
+
+  display: none;
+
+  gap: 10px;
+
+  flex-wrap: wrap;
+
+  margin-top: 15px;
+}
+
+button {
+
+  cursor: pointer;
+
+  border-radius: 8px;
+
+  padding:
+    10px
+    15px;
+
+  font-size: 14px;
+
+  font-weight: bold;
+}
+
+.primary {
+
+  background: #D9AA3E;
+
+  color: #2B2005;
+
+  border: none;
+}
+
+.secondary {
+
+  background: transparent;
+
+  color: #F5F2E8;
+
+  border:
+    1px solid
+    rgba(248,246,240,0.2);
+}
+
+/* STATUS */
+
+.status {
+
+  margin-top: 15px;
+
+  padding: 12px;
+
+  border-radius: 8px;
+
+  background:
+    rgba(248,246,240,0.06);
+
+  color: #CFE0D5;
+
+  font-size: 14px;
+}
+
+/* ANALYSIS */
+
+.analysis {
+
+  display: none;
+}
+
+.analysis h2 {
+
+  margin-top: 0;
+
+}
+
+.stats {
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, 1fr);
+
+  gap: 10px;
+
+  margin-top: 15px;
+}
+
+.stat {
+
+  background:
+    rgba(248,246,240,0.06);
+
+  border-radius: 10px;
+
+  padding: 15px;
+
+  text-align: center;
+}
+
+.stat-number {
+
+  font-size: 28px;
+
+  font-weight: bold;
+
+  color: #D9AA3E;
+}
+
+.stat-label {
+
+  font-size: 12px;
+
+  color: #CFE0D5;
+
+  margin-top: 4px;
+}
+
+.loading {
+
+  display: none;
+
+  text-align: center;
+
+  margin-top: 15px;
+
+  color: #D9AA3E;
+
+  font-weight: bold;
+}
+
+/* MOBILE */
+
+@media (max-width: 600px) {
+
+  body {
+    padding: 12px;
+  }
+
+  .panel {
+    padding: 15px;
+  }
+
+  .header h1 {
+    font-size: 25px;
+  }
+
+  .stats {
+    grid-template-columns:
+      1fr;
+  }
+
+}
+
 </style>
+
 </head>
+
+
 <body>
-<div class="app">
-<a href="index.html" class="back-btn">
-    ← Zurück zum Badminton Punkt-Tracker
+
+<div class="container">
+
+
+<a
+  href="index.html"
+  class="back-button"
+>
+← Zurück zum Badminton Punkt-Tracker
 </a>
-<h1>🏸 Badminton Videoanalyse</h1>
+
+
+<div class="header">
+
+<h1>
+🏸 KI Videoanalyse
+</h1>
+
+<p>
+Automatische Spielererkennung mit Computer Vision
+</p>
+
+</div>
+
+
+<!-- UPLOAD PANEL -->
+
 <div class="panel">
-    <div id="modeStatus" class="status">
-        STATUS: BITTE VIDEO LADEN
-    </div>
-    <input
-        type="file"
-        id="fileInput"
-        accept="video/*"
-    >
-    <div class="video-container">
-        <video id="video" playsinline preload="metadata"></video>
-        <canvas id="canvas"></canvas>
-    </div>
-    <div class="controls">
-        <button id="prevFrame">
-            ⏮ Frame zurück
-        </button>
-        <button id="playBtn">
-            ▶ PLAY
-        </button>
-        <button id="nextFrame">
-            Frame vor ⏭
-        </button>
-        <select id="speedSelect">
-            <option value="0.25">0,25×</option>
-            <option value="0.5">0,5×</option>
-            <option value="1" selected>1×</option>
-            <option value="1.5">1,5×</option>
-            <option value="2">2×</option>
-        </select>
-        <button id="clearBtn" class="clear-btn">
-            Analyse zurücksetzen
-        </button>
-    </div>
+
+
+<div class="upload-area">
+
+<div>
+Wähle dein Badminton-Video aus.
 </div>
-<div class="panel">
-    <div class="data-grid">
-        <div class="data-box">
-            <div class="data-title">Schlagart</div>
-            <select id="shotTypeSelect">
-                <option value="Smash">Smash</option>
-                <option value="Clear">Clear</option>
-                <option value="Drop">Drop</option>
-                <option value="Drive">Drive</option>
-                <option value="Netz">Netz</option>
-            </select>
-        </div>
-        <div class="data-box">
-            <div class="data-title">Koordinaten</div>
-            <div id="coordData">
-                Keine Punkte markiert
-            </div>
-        </div>
-        <div class="data-box">
-            <div class="data-title">Kniewinkel</div>
-            <div id="angleData" class="data-value">
-                --°
-            </div>
-        </div>
-        <div class="data-box">
-            <div class="data-title">Federball</div>
-            <div id="shuttleCoords" class="data-value">
-                Shuttle-Position: N/A
-            </div>
-        </div>
-        <div class="data-box">
-            <div class="data-title">Geschwindigkeit</div>
-            <div id="speedData" class="data-value">
-                -- km/h
-            </div>
-        </div>
-        <div class="data-box">
-            <div class="data-title">Treffzone</div>
-            <div id="heatMapStatus" class="data-value">
-                Spielfeldzone: Keine Daten
-            </div>
-        </div>
-    </div>
-    <div class="data-box" style="margin-top: 10px;">
-        <div class="data-title">Klassifizierung</div>
-        <div id="classificationReport" class="data-value">
-            Noch keine Analyse
-        </div>
-    </div>
+
+
+<label
+  for="fileInput"
+  class="upload-button"
+>
+📹 Video auswählen
+</label>
+
+
+<input
+  id="fileInput"
+  class="file-input"
+  type="file"
+  accept="video/*"
+>
+
+
 </div>
+
+
+<!-- LOADING -->
+
+<div
+  id="loading"
+  class="loading"
+>
+🤖 KI-Modell wird geladen...
 </div>
+
+
+<!-- VIDEO -->
+
+<div
+  id="videoWrapper"
+  class="video-wrapper"
+>
+
+
+<video
+  id="video"
+  controls
+  playsinline
+  preload="metadata"
+></video>
+
+
+<canvas
+  id="overlay"
+></canvas>
+
+
+</div>
+
+
+<!-- CONTROLS -->
+
+<div
+  id="controls"
+  class="controls"
+>
+
+
+<button
+  id="startAnalysis"
+  class="primary"
+>
+▶ KI-Analyse starten
+</button>
+
+
+<button
+  id="stopAnalysis"
+  class="secondary"
+>
+⏹ Analyse stoppen
+</button>
+
+
+</div>
+
+
+<div
+  id="status"
+  class="status"
+>
+Noch kein Video ausgewählt.
+</div>
+
+
+</div>
+
+
+<!-- ANALYSE RESULTATE -->
+
+
+<div
+  id="analysisPanel"
+  class="panel analysis"
+>
+
+
+<h2>
+📊 Live-Analyse
+</h2>
+
+
+<div class="stats">
+
+
+<div class="stat">
+
+<div
+  id="playerCount"
+  class="stat-number"
+>
+0
+</div>
+
+<div class="stat-label">
+Erkannte Spieler
+</div>
+
+</div>
+
+
+<div class="stat">
+
+<div
+  id="confidence"
+  class="stat-number"
+>
+0%
+</div>
+
+<div class="stat-label">
+Erkennungsgenauigkeit
+</div>
+
+</div>
+
+
+<div class="stat">
+
+<div
+  id="frames"
+  class="stat-number"
+>
+0
+</div>
+
+<div class="stat-label">
+Analysierte Frames
+</div>
+
+</div>
+
+
+</div>
+
+
+</div>
+
+
+</div>
+
+
 <script>
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const fileInput = document.getElementById('fileInput');
-const shotTypeSelect = document.getElementById('shotTypeSelect');
-const modeStatus = document.getElementById('modeStatus');
-const coordData = document.getElementById('coordData');
-const angleData = document.getElementById('angleData');
-const shuttleCoords = document.getElementById('shuttleCoords');
-const speedData = document.getElementById('speedData');
-const classificationReport = document.getElementById('classificationReport');
-const heatMapStatus = document.getElementById('heatMapStatus');
-const playBtn = document.getElementById('playBtn');
-const prevFrame = document.getElementById('prevFrame');
-const nextFrame = document.getElementById('nextFrame');
-const speedSelect = document.getElementById('speedSelect');
-const clearBtn = document.getElementById('clearBtn');
-let bodyPoints = [];
-let shuttlePoint = null;
+
+
+// ==========================================
+// ELEMENTE
+// ==========================================
+
+
+const fileInput =
+  document.getElementById(
+    "fileInput"
+  );
+
+
+const video =
+  document.getElementById(
+    "video"
+  );
+
+
+const videoWrapper =
+  document.getElementById(
+    "videoWrapper"
+  );
+
+
+const overlay =
+  document.getElementById(
+    "overlay"
+  );
+
+
+const ctx =
+  overlay.getContext(
+    "2d"
+  );
+
+
+const controls =
+  document.getElementById(
+    "controls"
+  );
+
+
+const startButton =
+  document.getElementById(
+    "startAnalysis"
+  );
+
+
+const stopButton =
+  document.getElementById(
+    "stopAnalysis"
+  );
+
+
+const status =
+  document.getElementById(
+    "status"
+  );
+
+
+const loading =
+  document.getElementById(
+    "loading"
+  );
+
+
+const analysisPanel =
+  document.getElementById(
+    "analysisPanel"
+  );
+
+
+const playerCount =
+  document.getElementById(
+    "playerCount"
+  );
+
+
+const confidence =
+  document.getElementById(
+    "confidence"
+  );
+
+
+const framesElement =
+  document.getElementById(
+    "frames"
+  );
+
+
+// ==========================================
+// VARIABLEN
+// ==========================================
+
+
+let model = null;
+
 let videoURL = null;
-const bodyLabels = [
-    "Schulter",
-    "Hüfte",
-    "Knie",
-    "Fuß"
-];
-/* =========================================
-   VIDEO LADEN
-========================================= */
-fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (videoURL) {
-        URL.revokeObjectURL(videoURL);
+
+let analyzing = false;
+
+let frameCount = 0;
+
+let animationFrame = null;
+
+
+// ==========================================
+// VIDEO AUSWÄHLEN
+// ==========================================
+
+
+fileInput.addEventListener(
+  "change",
+  function(event) {
+
+
+    const file =
+      event.target.files[0];
+
+
+    if (!file) {
+      return;
     }
-    videoURL = URL.createObjectURL(file);
-    video.src = videoURL;
-    video.load();
-    modeStatus.innerText = "STATUS: VIDEO WIRD GELADEN...";
-    modeStatus.style.color = "#D9AA3E";
-});
-/* =========================================
-   VIDEO GELADEN
-========================================= */
-video.addEventListener('loadedmetadata', () => {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    video.playbackRate = parseFloat(speedSelect.value);
-    resetAllMetrics();
-    modeStatus.innerText =
-        "STATUS: KLICKE AUF DIE SCHULTER";
-    modeStatus.style.color = "#00ffcc";
-    drawVideoFrame();
-});
-video.addEventListener('error', () => {
-    modeStatus.innerText =
-        "FEHLER: VIDEO KONNTE NICHT GELADEN WERDEN";
-    modeStatus.style.color = "#E0637A";
-});
-/* =========================================
-   PLAY / PAUSE
-========================================= */
-playBtn.addEventListener('click', () => {
-    if (!video.src) {
-        modeStatus.innerText =
-            "STATUS: BITTE ZUERST EIN VIDEO LADEN";
-        return;
-    }
-    if (video.paused) {
-        video.play();
-        playBtn.innerText = "⏸ PAUSE";
-        updateLoop();
-    } else {
-        video.pause();
-        playBtn.innerText = "▶ PLAY";
-    }
-});
-function updateLoop() {
-    if (video.paused || video.ended) {
-        playBtn.innerText = "▶ PLAY";
-        return;
-    }
-    drawVideoFrame();
-    requestAnimationFrame(updateLoop);
-}
-/* =========================================
-   VIDEO AUF CANVAS ZEICHNEN
-========================================= */
-function drawVideoFrame() {
-    if (!video.videoWidth || !video.videoHeight) {
-        return;
-    }
-    ctx.clearRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-    );
-    ctx.drawImage(
-        video,
-        0,
-        0,
-        canvas.width,
-        canvas.height
-    );
-    renderOverlay();
-}
-/* =========================================
-   GESCHWINDIGKEIT
-========================================= */
-speedSelect.addEventListener('change', () => {
-    video.playbackRate =
-        parseFloat(speedSelect.value);
-});
-/* =========================================
-   FRAME ZURÜCK
-========================================= */
-prevFrame.addEventListener('click', () => {
-    if (!video.src) return;
-    video.pause();
-    playBtn.innerText = "▶ PLAY";
-    video.currentTime =
-        Math.max(
-            0,
-            video.currentTime - 0.04
-        );
-    setTimeout(
-        drawVideoFrame,
-        50
-    );
-});
-/* =========================================
-   FRAME VOR
-========================================= */
-nextFrame.addEventListener('click', () => {
-    if (!video.src) return;
-    video.pause();
-    playBtn.innerText = "▶ PLAY";
-    video.currentTime =
-        Math.min(
-            video.duration,
-            video.currentTime + 0.04
-        );
-    setTimeout(
-        drawVideoFrame,
-        50
-    );
-});
-/* =========================================
-   AUF CANVAS KLICKEN
-========================================= */
-canvas.addEventListener('click', (e) => {
-    if (!video.src) return;
-    const rect =
-        canvas.getBoundingClientRect();
-    const posX =
-        ((e.clientX - rect.left) /
-        rect.width) *
-        canvas.width;
-    const posY =
-        ((e.clientY - rect.top) /
-        rect.height) *
-        canvas.height;
-    if (bodyPoints.length < 4) {
-        bodyPoints.push({
-            x: posX,
-            y: posY,
-            label:
-                bodyLabels[
-                    bodyPoints.length
-                ]
-        });
-    } else if (!shuttlePoint) {
-        shuttlePoint = {
-            x: posX,
-            y: posY
-        };
-    }
-    drawVideoFrame();
-});
-/* =========================================
-   OVERLAY ZEICHNEN
-========================================= */
-function renderOverlay() {
-    coordData.innerHTML = "";
-    if (bodyPoints.length > 0) {
-        ctx.lineWidth =
-            Math.max(
-                5,
-                canvas.width / 140
-            );
-        ctx.lineCap = "round";
-        ctx.strokeStyle = "#ff3366";
-        ctx.beginPath();
-        for (
-            let i = 0;
-            i < bodyPoints.length;
-            i++
-        ) {
-            const point =
-                bodyPoints[i];
-            if (i === 0) {
-                ctx.moveTo(
-                    point.x,
-                    point.y
-                );
-            } else {
-                ctx.lineTo(
-                    point.x,
-                    point.y
-                );
-            }
-            ctx.fillStyle =
-                "#ffcc00";
-            ctx.beginPath();
-            ctx.arc(
-                point.x,
-                point.y,
-                Math.max(
-                    7,
-                    canvas.width / 90
-                ),
-                0,
-                2 * Math.PI
-            );
-            ctx.fill();
-            ctx.beginPath();
-            if (i === 0) {
-                ctx.moveTo(
-                    point.x,
-                    point.y
-                );
-            } else {
-                ctx.moveTo(
-                    bodyPoints[i - 1].x,
-                    bodyPoints[i - 1].y
-                );
-                ctx.lineTo(
-                    point.x,
-                    point.y
-                );
-            }
-            ctx.stroke();
-            coordData.innerHTML +=
-                `<div>• ${point.label}: [${Math.round(point.x)}, ${Math.round(point.y)}]</div>`;
-        }
-    }
-    if (bodyPoints.length < 4) {
-        modeStatus.innerText =
-            `STATUS: KLICKE AUF ${
-                bodyLabels[
-                    bodyPoints.length
-                ].toUpperCase()
-            }`;
-        modeStatus.style.color =
-            "#ff3366";
-    } else if (!shuttlePoint) {
-        modeStatus.innerText =
-            "STATUS: SKELETT FERTIG! KLICKE AUF DEN BALL";
-        modeStatus.style.color =
-            "#D9AA3E";
-    } else {
-        modeStatus.innerText =
-            "STATUS: ANALYSE ABGESCHLOSSEN";
-        modeStatus.style.color =
-            "#00ffcc";
-    }
-    /* KNIEWINKEL */
-    if (bodyPoints.length >= 3) {
-        const p1 = bodyPoints[0];
-        const p2 = bodyPoints[1];
-        const p3 = bodyPoints[2];
-        const angle1 =
-            Math.atan2(
-                p1.y - p2.y,
-                p1.x - p2.x
-            );
-        const angle2 =
-            Math.atan2(
-                p3.y - p2.y,
-                p3.x - p2.x
-            );
-        let angle =
-            Math.abs(
-                (angle1 - angle2) *
-                180 /
-                Math.PI
-            );
-        if (angle > 180) {
-            angle =
-                360 - angle;
-        }
-        angleData.innerText =
-            Math.round(angle) +
-            "° Kniewinkel";
-    }
-    /* FEDERBALL */
+
+
     if (
-        shuttlePoint &&
-        bodyPoints.length > 0
+      !file.type.startsWith(
+        "video/"
+      )
     ) {
-        ctx.fillStyle =
-            "#ffcc00";
-        ctx.beginPath();
-        ctx.arc(
-            shuttlePoint.x,
-            shuttlePoint.y,
-            Math.max(
-                8,
-                canvas.width / 80
-            ),
-            0,
-            2 * Math.PI
-        );
-        ctx.fill();
-        ctx.strokeStyle =
-            "#ffcc00";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(
-            bodyPoints[0].x,
-            bodyPoints[0].y
-        );
-        ctx.lineTo(
-            shuttlePoint.x,
-            shuttlePoint.y
-        );
-        ctx.stroke();
-        shuttleCoords.innerText =
-            `Shuttle-Position: [X:${Math.round(shuttlePoint.x)}, Y:${Math.round(shuttlePoint.y)}]`;
-        const baseType =
-            shotTypeSelect.value;
-        /*
-        WICHTIG:
-        Diese Geschwindigkeit ist weiterhin nur
-        eine Simulation und keine echte Messung.
-        */
-        let simulatedSpeed = 0;
-        if (baseType === "Smash") {
-            simulatedSpeed =
-                Math.floor(
-                    Math.random() *
-                    (380 - 290) +
-                    290
-                );
-        } else if (
-            baseType === "Clear"
-        ) {
-            simulatedSpeed =
-                Math.floor(
-                    Math.random() *
-                    (190 - 140) +
-                    140
-                );
-        } else {
-            simulatedSpeed =
-                Math.floor(
-                    Math.random() *
-                    (90 - 60) +
-                    60
-                );
-        }
-        speedData.innerText =
-            simulatedSpeed +
-            " km/h";
+
+      status.textContent =
+        "Bitte wähle eine gültige Videodatei.";
+
+      return;
+
     }
-    classificationReport.innerText =
-        `Klassifizierung: ${
-            shotTypeSelect.value.toUpperCase()
-        }`;
-    if (shuttlePoint) {
-        if (
-            shuttlePoint.x <
-            canvas.width / 2
-        ) {
-            heatMapStatus.innerText =
-                "Treffzone: LINKES FELD";
-        } else {
-            heatMapStatus.innerText =
-                "Treffzone: RECHTES FELD";
-        }
+
+
+    // Alte URL entfernen
+
+    if (videoURL) {
+
+      URL.revokeObjectURL(
+        videoURL
+      );
+
     }
-}
-/* =========================================
-   RESET
-========================================= */
-function resetAllMetrics() {
-    bodyPoints = [];
-    shuttlePoint = null;
-    ctx.clearRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
+
+
+    // Neue Video URL
+
+    videoURL =
+      URL.createObjectURL(
+        file
+      );
+
+
+    video.src =
+      videoURL;
+
+
+    video.load();
+
+
+    // Video sichtbar machen
+
+    videoWrapper.style.display =
+      "block";
+
+
+    controls.style.display =
+      "flex";
+
+
+    analysisPanel.style.display =
+      "block";
+
+
+    status.textContent =
+      "Video geladen: " +
+      file.name;
+
+
+    // Canvas Größe anpassen
+
+    video.addEventListener(
+      "loadedmetadata",
+      setupCanvas,
+      {
+        once: true
+      }
     );
-    coordData.innerHTML =
-        "Keine Punkte markiert";
-    angleData.innerText =
-        "--°";
-    shuttleCoords.innerText =
-        "Shuttle-Position: N/A";
-    speedData.innerText =
-        "-- km/h";
-    heatMapStatus.innerText =
-        "Spielfeldzone: Keine Daten";
-    classificationReport.innerText =
-        "Noch keine Analyse";
-}
-/* =========================================
-   ANALYSE ZURÜCKSETZEN
-========================================= */
-clearBtn.addEventListener('click', () => {
-    resetAllMetrics();
-    if (video.src) {
-        modeStatus.innerText =
-            "STATUS: KLICKE AUF DIE SCHULTER";
-        modeStatus.style.color =
-            "#00ffcc";
-        drawVideoFrame();
-    } else {
-        modeStatus.innerText =
-            "STATUS: BITTE VIDEO LADEN";
-        modeStatus.style.color =
-            "#ff3366";
-    }
-});
-/* =========================================
-   SCHLAGART ÄNDERN
-========================================= */
-shotTypeSelect.addEventListener(
-    'change',
-    () => {
-        if (bodyPoints.length > 0) {
-            renderOverlay();
-        }
-    }
+
+
+  }
 );
+
+
+// ==========================================
+// CANVAS AN VIDEO ANPASSEN
+// ==========================================
+
+
+function setupCanvas() {
+
+
+  overlay.width =
+    video.videoWidth;
+
+
+  overlay.height =
+    video.videoHeight;
+
+
+  console.log(
+    "Video:",
+    video.videoWidth,
+    "x",
+    video.videoHeight
+  );
+
+
+}
+
+
+// ==========================================
+// KI MODELL LADEN
+// ==========================================
+
+
+async function loadModel() {
+
+
+  if (model) {
+
+    return model;
+
+  }
+
+
+  loading.style.display =
+    "block";
+
+
+  status.textContent =
+    "🤖 KI-Modell wird geladen. Das kann beim ersten Mal etwas dauern...";
+
+
+  try {
+
+
+    model =
+      await cocoSsd.load();
+
+
+    loading.style.display =
+      "none";
+
+
+    status.textContent =
+      "✅ KI-Modell bereit. Du kannst die Analyse starten.";
+
+
+    return model;
+
+
+  } catch (error) {
+
+
+    console.error(
+      error
+    );
+
+
+    loading.style.display =
+      "none";
+
+
+    status.textContent =
+      "❌ Das KI-Modell konnte nicht geladen werden.";
+
+
+    throw error;
+
+  }
+
+}
+
+
+// ==========================================
+// ANALYSE STARTEN
+// ==========================================
+
+
+startButton.addEventListener(
+  "click",
+  async function() {
+
+
+    if (!video.src) {
+
+      status.textContent =
+        "Bitte zuerst ein Video auswählen.";
+
+      return;
+
+    }
+
+
+    try {
+
+
+      // KI laden
+
+      await loadModel();
+
+
+      analyzing =
+        true;
+
+
+      frameCount =
+        0;
+
+
+      // Video starten
+
+      await video.play();
+
+
+      status.textContent =
+        "🤖 KI analysiert das Video...";
+
+
+      // Analyse starten
+
+      detectFrame();
+
+
+    } catch (error) {
+
+
+      console.error(
+        error
+      );
+
+
+      status.textContent =
+        "Fehler beim Starten der Analyse.";
+
+    }
+
+  }
+);
+
+
+// ==========================================
+// ANALYSE STOPPEN
+// ==========================================
+
+
+stopButton.addEventListener(
+  "click",
+  function() {
+
+
+    analyzing =
+      false;
+
+
+    if (animationFrame) {
+
+      cancelAnimationFrame(
+        animationFrame
+      );
+
+    }
+
+
+    video.pause();
+
+
+    status.textContent =
+      "⏹ Analyse gestoppt.";
+
+  }
+);
+
+
+// ==========================================
+// FRAME ANALYSIEREN
+// ==========================================
+
+
+async function detectFrame() {
+
+
+  if (
+    !analyzing ||
+    video.paused ||
+    video.ended
+  ) {
+
+
+    if (video.ended) {
+
+      analyzing =
+        false;
+
+
+      status.textContent =
+        "✅ Videoanalyse abgeschlossen.";
+
+    }
+
+
+    return;
+
+  }
+
+
+  // Erkennung durchführen
+
+  const predictions =
+    await model.detect(
+      video
+    );
+
+
+  // Canvas löschen
+
+  ctx.clearRect(
+    0,
+    0,
+    overlay.width,
+    overlay.height
+  );
+
+
+  // Nur Personen auswählen
+
+  const players =
+    predictions.filter(
+      prediction =>
+        prediction.class ===
+        "person" &&
+        prediction.score >
+        0.35
+    );
+
+
+  // Spieler zeichnen
+
+  players.forEach(
+    (player, index) => {
+
+
+      const [
+        x,
+        y,
+        width,
+        height
+      ] =
+        player.bbox;
+
+
+      // Box
+
+      ctx.strokeStyle =
+        "#00FF66";
+
+
+      ctx.lineWidth =
+        4;
+
+
+      ctx.strokeRect(
+        x,
+        y,
+        width,
+        height
+      );
+
+
+      // Hintergrund für Label
+
+      ctx.fillStyle =
+        "#00FF66";
+
+
+      const label =
+        "Spieler " +
+        (index + 1) +
+        " " +
+        Math.round(
+          player.score *
+          100
+        ) +
+        "%";
+
+
+      const textWidth =
+        ctx.measureText(
+          label
+        ).width;
+
+
+      ctx.fillRect(
+        x,
+        Math.max(
+          0,
+          y - 25
+        ),
+        textWidth + 12,
+        25
+      );
+
+
+      // Text
+
+      ctx.fillStyle =
+        "#000000";
+
+
+      ctx.font =
+        "bold 14px Arial";
+
+
+      ctx.fillText(
+        label,
+        x + 6,
+        Math.max(
+          17,
+          y - 7
+        )
+      );
+
+
+    }
+  );
+
+
+  // Statistik aktualisieren
+
+  playerCount.textContent =
+    players.length;
+
+
+  if (
+    players.length > 0
+  ) {
+
+
+    const averageConfidence =
+      players.reduce(
+        (sum, player) =>
+          sum +
+          player.score,
+        0
+      ) /
+      players.length;
+
+
+    confidence.textContent =
+      Math.round(
+        averageConfidence *
+        100
+      ) +
+      "%";
+
+
+  } else {
+
+
+    confidence.textContent =
+      "0%";
+
+  }
+
+
+  frameCount++;
+
+
+  framesElement.textContent =
+    frameCount;
+
+
+  // Nächsten Frame analysieren
+
+  animationFrame =
+    requestAnimationFrame(
+      detectFrame
+    );
+
+
+}
+
+
+// ==========================================
+// VIDEO ENDE
+// ==========================================
+
+
+video.addEventListener(
+  "ended",
+  function() {
+
+
+    analyzing =
+      false;
+
+
+    ctx.clearRect(
+      0,
+      0,
+      overlay.width,
+      overlay.height
+    );
+
+
+    status.textContent =
+      "✅ Videoanalyse abgeschlossen.";
+
+  }
+);
+
+
+// ==========================================
+// VIDEO PAUSE
+// ==========================================
+
+
+video.addEventListener(
+  "pause",
+  function() {
+
+
+    if (analyzing) {
+
+      status.textContent =
+        "⏸ Video pausiert – Analyse wartet.";
+
+    }
+
+  }
+);
+
+
+// ==========================================
+// AUFRÄUMEN
+// ==========================================
+
+
+window.addEventListener(
+  "beforeunload",
+  function() {
+
+
+    if (videoURL) {
+
+      URL.revokeObjectURL(
+        videoURL
+      );
+
+    }
+
+  }
+);
+
+
 </script>
+
 </body>
 </html>
