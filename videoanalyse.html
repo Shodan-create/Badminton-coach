@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Badminton Coach – Videoanalyse</title>
+<style>
+    * {
+        box-sizing: border-box;
+    }
+    html, body {
+        margin: 0;
+        padding: 0;
+        min-height: 100%;
+        background: #0A2A20;
+        color: #F5F2E8;
+        font-family: Arial, sans-serif;
+    }
+    body {
+        padding: 20px;
+    }
+    .app {
+        width: 100%;
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    h1 {
+        text-align: center;
+        margin: 0 0 20px;
+        color: #D9AA3E;
+    }
+    .panel {
+        background: #0F3527;
+        border: 1px solid rgba(248,246,240,0.15);
+        border-radius: 14px;
+        padding: 18px;
+        margin-bottom: 20px;
+    }
+    .status {
+        text-align: center;
+        font-weight: bold;
+        margin-bottom: 15px;
+        color: #00ffcc;
+    }
+    input,
+    select,
+    button {
+        font-family: Arial, sans-serif;
+    }
+    input[type="file"] {
+        width: 100%;
+        padding: 12px;
+        background: #123C2D;
+        color: white;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.15);
+        margin-bottom: 15px;
+    }
+    select {
+        padding: 10px;
+        background: #123C2D;
+        color: white;
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 8px;
+    }
+    .video-container {
+        width: 100%;
+        background: #000;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 15px;
+        position: relative;
+    }
+    /*
+      Das Video selbst bleibt unsichtbar.
+      Das Canvas zeigt das Video inklusive Analyse-Markierungen.
+    */
+    #video {
+        display: none;
+    }
+    #canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        min-height: 250px;
+        background: #000;
+        cursor: crosshair;
+    }
+    .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+    }
+    button {
+        background: #123C2D;
+        color: #F5F2E8;
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 8px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    button:hover {
+        background: #17493A;
+    }
+    .clear-btn {
+        border-color: #E0637A;
+        color: #E0637A;
+    }
+    .back-btn {
+        display: inline-block;
+        text-decoration: none;
+        background: #D9AA3E;
+        color: #2B2005;
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-weight: bold;
+        margin-bottom: 20px;
+    }
+    .data-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    .data-box {
+        background: rgba(248,246,240,0.06);
+        border-radius: 8px;
+        padding: 12px;
+        min-height: 60px;
+    }
+    .data-title {
+        color: #CFE0D5;
+        font-size: 12px;
+        margin-bottom: 5px;
+        text-transform: uppercase;
+    }
+    .data-value {
+        font-size: 15px;
+        font-weight: bold;
+    }
+    #coordData {
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    @media (max-width: 600px) {
+        body {
+            padding: 10px;
+        }
+        .panel {
+            padding: 12px;
+        }
+        .data-grid {
+            grid-template-columns: 1fr;
+        }
+        #canvas {
+            min-height: 180px;
+        }
+        button {
+            flex: 1;
+        }
+    }
+</style>
+</head>
+<body>
+<div class="app">
+<a href="index.html" class="back-btn">
+    ← Zurück zum Badminton Punkt-Tracker
+</a>
+<h1>🏸 Badminton Videoanalyse</h1>
+<div class="panel">
+    <div id="modeStatus" class="status">
+        STATUS: BITTE VIDEO LADEN
+    </div>
+    <input
+        type="file"
+        id="fileInput"
+        accept="video/*"
+    >
+    <div class="video-container">
+        <video id="video" playsinline preload="metadata"></video>
+        <canvas id="canvas"></canvas>
+    </div>
+    <div class="controls">
+        <button id="prevFrame">
+            ⏮ Frame zurück
+        </button>
+        <button id="playBtn">
+            ▶ PLAY
+        </button>
+        <button id="nextFrame">
+            Frame vor ⏭
+        </button>
+        <select id="speedSelect">
+            <option value="0.25">0,25×</option>
+            <option value="0.5">0,5×</option>
+            <option value="1" selected>1×</option>
+            <option value="1.5">1,5×</option>
+            <option value="2">2×</option>
+        </select>
+        <button id="clearBtn" class="clear-btn">
+            Analyse zurücksetzen
+        </button>
+    </div>
+</div>
+<div class="panel">
+    <div class="data-grid">
+        <div class="data-box">
+            <div class="data-title">Schlagart</div>
+            <select id="shotTypeSelect">
+                <option value="Smash">Smash</option>
+                <option value="Clear">Clear</option>
+                <option value="Drop">Drop</option>
+                <option value="Drive">Drive</option>
+                <option value="Netz">Netz</option>
+            </select>
+        </div>
+        <div class="data-box">
+            <div class="data-title">Koordinaten</div>
+            <div id="coordData">
+                Keine Punkte markiert
+            </div>
+        </div>
+        <div class="data-box">
+            <div class="data-title">Kniewinkel</div>
+            <div id="angleData" class="data-value">
+                --°
+            </div>
+        </div>
+        <div class="data-box">
+            <div class="data-title">Federball</div>
+            <div id="shuttleCoords" class="data-value">
+                Shuttle-Position: N/A
+            </div>
+        </div>
+        <div class="data-box">
+            <div class="data-title">Geschwindigkeit</div>
+            <div id="speedData" class="data-value">
+                -- km/h
+            </div>
+        </div>
+        <div class="data-box">
+            <div class="data-title">Treffzone</div>
+            <div id="heatMapStatus" class="data-value">
+                Spielfeldzone: Keine Daten
+            </div>
+        </div>
+    </div>
+    <div class="data-box" style="margin-top: 10px;">
+        <div class="data-title">Klassifizierung</div>
+        <div id="classificationReport" class="data-value">
+            Noch keine Analyse
+        </div>
+    </div>
+</div>
+</div>
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const fileInput = document.getElementById('fileInput');
+const shotTypeSelect = document.getElementById('shotTypeSelect');
+const modeStatus = document.getElementById('modeStatus');
+const coordData = document.getElementById('coordData');
+const angleData = document.getElementById('angleData');
+const shuttleCoords = document.getElementById('shuttleCoords');
+const speedData = document.getElementById('speedData');
+const classificationReport = document.getElementById('classificationReport');
+const heatMapStatus = document.getElementById('heatMapStatus');
+const playBtn = document.getElementById('playBtn');
+const prevFrame = document.getElementById('prevFrame');
+const nextFrame = document.getElementById('nextFrame');
+const speedSelect = document.getElementById('speedSelect');
+const clearBtn = document.getElementById('clearBtn');
+let bodyPoints = [];
+let shuttlePoint = null;
+let videoURL = null;
+const bodyLabels = [
+    "Schulter",
+    "Hüfte",
+    "Knie",
+    "Fuß"
+];
+/* =========================================
+   VIDEO LADEN
+========================================= */
+fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (videoURL) {
+        URL.revokeObjectURL(videoURL);
+    }
+    videoURL = URL.createObjectURL(file);
+    video.src = videoURL;
+    video.load();
+    modeStatus.innerText = "STATUS: VIDEO WIRD GELADEN...";
+    modeStatus.style.color = "#D9AA3E";
+});
+/* =========================================
+   VIDEO GELADEN
+========================================= */
+video.addEventListener('loadedmetadata', () => {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    video.playbackRate = parseFloat(speedSelect.value);
+    resetAllMetrics();
+    modeStatus.innerText =
+        "STATUS: KLICKE AUF DIE SCHULTER";
+    modeStatus.style.color = "#00ffcc";
+    drawVideoFrame();
+});
+video.addEventListener('error', () => {
+    modeStatus.innerText =
+        "FEHLER: VIDEO KONNTE NICHT GELADEN WERDEN";
+    modeStatus.style.color = "#E0637A";
+});
+/* =========================================
+   PLAY / PAUSE
+========================================= */
+playBtn.addEventListener('click', () => {
+    if (!video.src) {
+        modeStatus.innerText =
+            "STATUS: BITTE ZUERST EIN VIDEO LADEN";
+        return;
+    }
+    if (video.paused) {
+        video.play();
+        playBtn.innerText = "⏸ PAUSE";
+        updateLoop();
+    } else {
+        video.pause();
+        playBtn.innerText = "▶ PLAY";
+    }
+});
+function updateLoop() {
+    if (video.paused || video.ended) {
+        playBtn.innerText = "▶ PLAY";
+        return;
+    }
+    drawVideoFrame();
+    requestAnimationFrame(updateLoop);
+}
+/* =========================================
+   VIDEO AUF CANVAS ZEICHNEN
+========================================= */
+function drawVideoFrame() {
+    if (!video.videoWidth || !video.videoHeight) {
+        return;
+    }
+    ctx.clearRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+    ctx.drawImage(
+        video,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+    renderOverlay();
+}
+/* =========================================
+   GESCHWINDIGKEIT
+========================================= */
+speedSelect.addEventListener('change', () => {
+    video.playbackRate =
+        parseFloat(speedSelect.value);
+});
+/* =========================================
+   FRAME ZURÜCK
+========================================= */
+prevFrame.addEventListener('click', () => {
+    if (!video.src) return;
+    video.pause();
+    playBtn.innerText = "▶ PLAY";
+    video.currentTime =
+        Math.max(
+            0,
+            video.currentTime - 0.04
+        );
+    setTimeout(
+        drawVideoFrame,
+        50
+    );
+});
+/* =========================================
+   FRAME VOR
+========================================= */
+nextFrame.addEventListener('click', () => {
+    if (!video.src) return;
+    video.pause();
+    playBtn.innerText = "▶ PLAY";
+    video.currentTime =
+        Math.min(
+            video.duration,
+            video.currentTime + 0.04
+        );
+    setTimeout(
+        drawVideoFrame,
+        50
+    );
+});
+/* =========================================
+   AUF CANVAS KLICKEN
+========================================= */
+canvas.addEventListener('click', (e) => {
+    if (!video.src) return;
+    const rect =
+        canvas.getBoundingClientRect();
+    const posX =
+        ((e.clientX - rect.left) /
+        rect.width) *
+        canvas.width;
+    const posY =
+        ((e.clientY - rect.top) /
+        rect.height) *
+        canvas.height;
+    if (bodyPoints.length < 4) {
+        bodyPoints.push({
+            x: posX,
+            y: posY,
+            label:
+                bodyLabels[
+                    bodyPoints.length
+                ]
+        });
+    } else if (!shuttlePoint) {
+        shuttlePoint = {
+            x: posX,
+            y: posY
+        };
+    }
+    drawVideoFrame();
+});
+/* =========================================
+   OVERLAY ZEICHNEN
+========================================= */
+function renderOverlay() {
+    coordData.innerHTML = "";
+    if (bodyPoints.length > 0) {
+        ctx.lineWidth =
+            Math.max(
+                5,
+                canvas.width / 140
+            );
+        ctx.lineCap = "round";
+        ctx.strokeStyle = "#ff3366";
+        ctx.beginPath();
+        for (
+            let i = 0;
+            i < bodyPoints.length;
+            i++
+        ) {
+            const point =
+                bodyPoints[i];
+            if (i === 0) {
+                ctx.moveTo(
+                    point.x,
+                    point.y
+                );
+            } else {
+                ctx.lineTo(
+                    point.x,
+                    point.y
+                );
+            }
+            ctx.fillStyle =
+                "#ffcc00";
+            ctx.beginPath();
+            ctx.arc(
+                point.x,
+                point.y,
+                Math.max(
+                    7,
+                    canvas.width / 90
+                ),
+                0,
+                2 * Math.PI
+            );
+            ctx.fill();
+            ctx.beginPath();
+            if (i === 0) {
+                ctx.moveTo(
+                    point.x,
+                    point.y
+                );
+            } else {
+                ctx.moveTo(
+                    bodyPoints[i - 1].x,
+                    bodyPoints[i - 1].y
+                );
+                ctx.lineTo(
+                    point.x,
+                    point.y
+                );
+            }
+            ctx.stroke();
+            coordData.innerHTML +=
+                `<div>• ${point.label}: [${Math.round(point.x)}, ${Math.round(point.y)}]</div>`;
+        }
+    }
+    if (bodyPoints.length < 4) {
+        modeStatus.innerText =
+            `STATUS: KLICKE AUF ${
+                bodyLabels[
+                    bodyPoints.length
+                ].toUpperCase()
+            }`;
+        modeStatus.style.color =
+            "#ff3366";
+    } else if (!shuttlePoint) {
+        modeStatus.innerText =
+            "STATUS: SKELETT FERTIG! KLICKE AUF DEN BALL";
+        modeStatus.style.color =
+            "#D9AA3E";
+    } else {
+        modeStatus.innerText =
+            "STATUS: ANALYSE ABGESCHLOSSEN";
+        modeStatus.style.color =
+            "#00ffcc";
+    }
+    /* KNIEWINKEL */
+    if (bodyPoints.length >= 3) {
+        const p1 = bodyPoints[0];
+        const p2 = bodyPoints[1];
+        const p3 = bodyPoints[2];
+        const angle1 =
+            Math.atan2(
+                p1.y - p2.y,
+                p1.x - p2.x
+            );
+        const angle2 =
+            Math.atan2(
+                p3.y - p2.y,
+                p3.x - p2.x
+            );
+        let angle =
+            Math.abs(
+                (angle1 - angle2) *
+                180 /
+                Math.PI
+            );
+        if (angle > 180) {
+            angle =
+                360 - angle;
+        }
+        angleData.innerText =
+            Math.round(angle) +
+            "° Kniewinkel";
+    }
+    /* FEDERBALL */
+    if (
+        shuttlePoint &&
+        bodyPoints.length > 0
+    ) {
+        ctx.fillStyle =
+            "#ffcc00";
+        ctx.beginPath();
+        ctx.arc(
+            shuttlePoint.x,
+            shuttlePoint.y,
+            Math.max(
+                8,
+                canvas.width / 80
+            ),
+            0,
+            2 * Math.PI
+        );
+        ctx.fill();
+        ctx.strokeStyle =
+            "#ffcc00";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(
+            bodyPoints[0].x,
+            bodyPoints[0].y
+        );
+        ctx.lineTo(
+            shuttlePoint.x,
+            shuttlePoint.y
+        );
+        ctx.stroke();
+        shuttleCoords.innerText =
+            `Shuttle-Position: [X:${Math.round(shuttlePoint.x)}, Y:${Math.round(shuttlePoint.y)}]`;
+        const baseType =
+            shotTypeSelect.value;
+        /*
+        WICHTIG:
+        Diese Geschwindigkeit ist weiterhin nur
+        eine Simulation und keine echte Messung.
+        */
+        let simulatedSpeed = 0;
+        if (baseType === "Smash") {
+            simulatedSpeed =
+                Math.floor(
+                    Math.random() *
+                    (380 - 290) +
+                    290
+                );
+        } else if (
+            baseType === "Clear"
+        ) {
+            simulatedSpeed =
+                Math.floor(
+                    Math.random() *
+                    (190 - 140) +
+                    140
+                );
+        } else {
+            simulatedSpeed =
+                Math.floor(
+                    Math.random() *
+                    (90 - 60) +
+                    60
+                );
+        }
+        speedData.innerText =
+            simulatedSpeed +
+            " km/h";
+    }
+    classificationReport.innerText =
+        `Klassifizierung: ${
+            shotTypeSelect.value.toUpperCase()
+        }`;
+    if (shuttlePoint) {
+        if (
+            shuttlePoint.x <
+            canvas.width / 2
+        ) {
+            heatMapStatus.innerText =
+                "Treffzone: LINKES FELD";
+        } else {
+            heatMapStatus.innerText =
+                "Treffzone: RECHTES FELD";
+        }
+    }
+}
+/* =========================================
+   RESET
+========================================= */
+function resetAllMetrics() {
+    bodyPoints = [];
+    shuttlePoint = null;
+    ctx.clearRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+    coordData.innerHTML =
+        "Keine Punkte markiert";
+    angleData.innerText =
+        "--°";
+    shuttleCoords.innerText =
+        "Shuttle-Position: N/A";
+    speedData.innerText =
+        "-- km/h";
+    heatMapStatus.innerText =
+        "Spielfeldzone: Keine Daten";
+    classificationReport.innerText =
+        "Noch keine Analyse";
+}
+/* =========================================
+   ANALYSE ZURÜCKSETZEN
+========================================= */
+clearBtn.addEventListener('click', () => {
+    resetAllMetrics();
+    if (video.src) {
+        modeStatus.innerText =
+            "STATUS: KLICKE AUF DIE SCHULTER";
+        modeStatus.style.color =
+            "#00ffcc";
+        drawVideoFrame();
+    } else {
+        modeStatus.innerText =
+            "STATUS: BITTE VIDEO LADEN";
+        modeStatus.style.color =
+            "#ff3366";
+    }
+});
+/* =========================================
+   SCHLAGART ÄNDERN
+========================================= */
+shotTypeSelect.addEventListener(
+    'change',
+    () => {
+        if (bodyPoints.length > 0) {
+            renderOverlay();
+        }
+    }
+);
+</script>
+</body>
+</html>
